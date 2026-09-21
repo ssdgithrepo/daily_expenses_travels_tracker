@@ -57,6 +57,7 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
     <a class="nav-link" data-view="trips"><i class="bi bi-clock-history me-2"></i>Trip History</a>
     <a class="nav-link" data-view="reports"><i class="bi bi-bar-chart me-2"></i>Reports</a>
     <a class="nav-link" data-view="settings"><i class="bi bi-gear me-2"></i>Settings</a>
+    <a class="nav-link" data-view="help"><i class="bi bi-question-circle me-2"></i>Help & Guide</a>
   </nav>
   <nav id="navAdmin" class="nav flex-column d-none">
     <div class="small text-uppercase text-secondary mt-3 mb-2">Master Admin</div>
@@ -76,8 +77,9 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
  <div class="row g-3">
   <div class="col-md-3"><div class="card p-3"><div class="muted">This Month Expense</div><div id="mExpense" class="metric">₹0</div><small class="text-success">All categories</small></div></div>
   <div class="col-md-3"><div class="card p-3"><div class="muted">Distance</div><div id="mDistance" class="metric">0 km</div><small>Tracked trips</small></div></div>
-  <div class="col-md-3"><div class="card p-3"><div class="muted">Fuel Cost</div><div id="mFuel" class="metric">₹0</div><small>Estimated from mileage</small></div></div>
-  <div class="col-md-3"><div class="card p-3" id="fuelMetricCard"><div class="muted">Fuel Cost</div><div id="mFuel" class="metric">₹0</div><small>Estimated from mileage</small></div><div class="card p-3 d-none" id="walkMetricCard"><div class="muted">Walking Calories</div><div id="mCalories" class="metric">0 kcal</div><small>Estimated</small></div></div><div class="col-md-3"><div class="card p-3"><div class="muted">Active Vehicle / Steps</div><div id="mVehicle" class="metric">—</div><small id="mVehicleSub">Selected vehicle</small><div id="mSteps" class="small d-none">0 steps</div></div></div>
+  <div class="col-md-3" id="fuelMetricCard"><div class="card p-3"><div class="muted">Fuel Cost</div><div id="mFuel" class="metric">₹0</div><small>Estimated from mileage</small></div></div>
+  <div class="col-md-3 d-none" id="walkMetricCard"><div class="card p-3"><div class="muted">Calories Burned</div><div id="mCalories" class="metric">0 kcal</div><small>Walking estimate</small></div></div>
+  <div class="col-md-3"><div class="card p-3"><div class="muted" id="mActivityLabel">Active Vehicle</div><div id="mVehicle" class="metric">—</div><small id="mVehicleSub">Selected vehicle</small><div id="mSteps" class="small d-none">0 steps</div></div></div>
  </div>
  <div class="row g-3 mt-1">
   <div class="col-lg-7"><div class="card p-4"><div class="d-flex justify-content-between"><h5>Recent Expenses</h5><button class="btn btn-sm btn-primary" onclick="showView('expenses')">Add expense</button></div><div class="table-responsive mt-3"><table class="table align-middle"><thead><tr><th>Date</th><th>Category</th><th>Note</th><th class="text-end">Amount</th></tr></thead><tbody id="recentExpenses"></tbody></table></div></div></div>
@@ -153,6 +155,8 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 <section id="reports" class="view"><div class="row g-3"><div class="col-md-6"><div class="card p-4"><h5>Expense Summary</h5><div id="reportExpense"></div></div></div><div class="col-md-6"><div class="card p-4"><h5>Vehicle Running Summary</h5><div id="reportVehicle"></div></div></div></div></section>
 
 <section id="settings" class="view"><div class="card p-4"><h5>Settings</h5><div class="row g-3 mt-1"><div class="col-md-6"><label class="form-label">Default petrol rate (₹/L)</label><input id="defaultRate" type="number" class="form-control"></div><div class="col-md-6"><label class="form-label">Currency</label><input class="form-control" value="INR (₹)" disabled></div><div class="col-12"><button class="btn btn-primary" onclick="saveSettings()">Save Settings</button></div></div><hr><h6>Google Sheets Production Mode</h6><p class="small muted">Paste your deployed Google Apps Script Web App URL in the backend configuration when moving from Demo Mode.</p></div></section>
+
+<section id="help" class="view"><div class="card p-4"><h5>Help & Guide</h5><p class="small">Use Dashboard for summaries, Expenses for costs, Vehicles for vehicle setup, GPS Trip for live tracking, Trip History for saved trips, Reports for summaries, and Settings for preferences.</p></div></section>
 
 <section id="admin" class="view"><div class="card p-4"><div class="d-flex justify-content-between"><div><h5>Master Admin Console</h5><div class="muted small">Subscriber authentication and plan control</div></div><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#userModal"><i class="bi bi-person-plus"></i> Create Subscriber</button></div>
 <div class="table-responsive mt-3"><table class="table align-middle"><thead><tr><th>Business</th><th>Username</th><th>Plan</th><th>Expiry</th><th>Status</th><th></th></tr></thead><tbody id="userRows"></tbody></table></div>
@@ -290,14 +294,14 @@ document.querySelectorAll('[data-view]').forEach(x=>x.onclick=()=>showView(x.dat
 function showView(id){
  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');
  document.querySelectorAll('[data-view]').forEach(v=>v.classList.toggle('active',v.dataset.view===id));
- const titles={dashboard:'Dashboard',expenses:'Daily Expenses',vehicles:'Vehicle Master',trip:'GPS Trip',trips:'Trip History',reports:'Reports',settings:'Settings',admin:'Master Admin Console'};
+ const titles={dashboard:'Dashboard',expenses:'Daily Expenses',vehicles:'Vehicle Master',trip:'GPS Trip',trips:'Trip History',reports:'Reports',settings:'Settings',help:'Help & Guide',admin:'Master Admin Console'};
  document.getElementById('pageTitle').textContent=titles[id]||id;
  if(id==='reports')renderReports();
 }
 function renderAll(){renderDashboard();renderExpenses();renderVehicles();renderSelects();renderTrips();renderUsers();document.getElementById('defaultRate').value=state.settings.rate}
 function renderDashboard(){
  const total=state.expenses.reduce((s,e)=>s+Number(e.amount),0), dist=state.trips.reduce((s,t)=>s+t.km,0), fuel=state.trips.reduce((s,t)=>s+t.fuel,0), cost=state.trips.reduce((s,t)=>s+t.cost,0);
- document.getElementById('mExpense').textContent=money(total);document.getElementById('mDistance').textContent=dist.toFixed(1)+' km';document.getElementById('mFuel').textContent=money(cost);document.getElementById('mVehicle').textContent=state.vehicles.find(v=>v.active)?.name||'—';
+ document.getElementById('mExpense').textContent=money(total);document.getElementById('mDistance').textContent=dist.toFixed(1)+' km';document.getElementById('mFuel').textContent=money(cost);document.getElementById('mVehicle').textContent=state.vehicles.find(v=>v.active)?.name||'—'; updateWalkingUI(lastSpeedKmh,0,0);
  document.getElementById('recentExpenses').innerHTML=state.expenses.slice(-6).reverse().map(e=>`<tr><td>${e.date}</td><td>${e.cat}</td><td>${e.note||''}</td><td class="text-end">${money(e.amount)}</td></tr>`).join('')||'<tr><td colspan=4 class="text-center muted">No expenses</td></tr>';
 }
 function renderExpenses(){
