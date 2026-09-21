@@ -139,7 +139,7 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
     </div>
   </div>
 </div>
-<div class="mt-3"><div id="liveMap" style="height:320px;border-radius:16px;overflow:hidden;background:#e9eef5"></div><div class="d-flex justify-content-between align-items-center mt-2"><small class="muted"><i class="bi bi-broadcast-pin me-1"></i>Live route map updates while tracking</small><button id="centerMapBtn" class="btn btn-sm btn-outline-primary" type="button"><i class="bi bi-crosshair me-1"></i>Center</button></div><div class="small mt-2" id="gpsInfo">Location permission has not been requested.</div></div>
+<div class="mt-3"><div id="liveMap" style="height:320px;border-radius:16px;overflow:hidden;background:#e9eef5"></div><div class="d-flex justify-content-between align-items-center mt-2"><small class="muted"><i class="bi bi-broadcast-pin me-1"></i>Live route map updates while tracking</small><button id="centerMapBtn" class="btn btn-sm btn-outline-primary" type="button"><i class="bi bi-crosshair me-1"></i>Center</button></div><div class="small mt-2" id="gpsInfo">Location permission has not been requested.</div><div class="alert alert-light border mt-2 mb-0"><b>Live GPS Speed:</b> <span id="gpsSpeed">0.0 km/h</span> <span class="ms-2" id="movementMode">Walking / stationary</span></div></div>
 <div class="row text-center mt-3"><div class="col-4"><div class="metric" id="tripKm">0.00</div><small class="muted">KM</small></div><div class="col-4"><div class="metric" id="tripFuel">0.00</div><small class="muted">Fuel L</small></div><div class="col-4"><div class="metric" id="tripCost">₹0</div><small class="muted">Fuel Cost</small></div></div>
 <div class="d-flex gap-2 mt-4"><button id="startTrip" class="btn btn-success flex-fill" disabled><i class="bi bi-play-fill"></i> Start Trip</button><button id="stopTrip" class="btn btn-danger flex-fill" disabled><i class="bi bi-stop-fill"></i> Stop & Save</button></div>
 </div></div>
@@ -197,7 +197,7 @@ function loadDemoState(){
 }
 let state=loadDemoState();
 let currentUser=localStorage.getItem('SRD_DL_LOGIN_USER')||null, watchId=null, trip={running:false,points:[],km:0};
-let liveMap=null, liveMarker=null, liveAccuracy=null, liveRoute=null, lastMapPoint=null;
+let liveMap=null, liveMarker=null, liveAccuracy=null, liveRoute=null, lastMapPoint=null, lastSpeedKmh=0;
 function loadLeaflet(cb){
   if(window.L){cb();return;}
   if(window.__leafletLoading){window.__leafletCallbacks.push(cb);return;}
@@ -211,11 +211,17 @@ function initLiveMap(){
   liveRoute=L.polyline([],{weight:5}).addTo(liveMap);
   document.getElementById('centerMapBtn').onclick=()=>{if(lastMapPoint)liveMap.setView([lastMapPoint.lat,lastMapPoint.lon],16);};
 }
+function markerIcon(v, speed){
+  const walking = Number(speed||0) <= 10;
+  const glyph = walking ? '🚶' : (v?.type==='Two Wheeler' ? '🏍️' : v?.type==='Three Wheeler' ? '🛺' : v?.type==='Truck' ? '🚚' : v?.type==='Bus' ? '🚌' : v?.type==='Pickup' ? '🛻' : '🚗');
+  return L.divIcon({className:'gps-user-marker',html:`<div style="font-size:30px;text-align:center;text-shadow:0 1px 3px #fff">${glyph}</div>`,iconSize:[36,36],iconAnchor:[18,18]});
+}
 function updateLiveMap(p){
   if(!window.L){ loadLeaflet(()=>updateLiveMap(p)); return; }
   initLiveMap(); if(!liveMap) return;
   const ll=[p.lat,p.lon]; lastMapPoint=p;
-  if(!liveMarker) liveMarker=L.marker(ll).addTo(liveMap).bindPopup('Current GPS position'); else liveMarker.setLatLng(ll);
+  const v=vehicle(document.getElementById('tripVehicle').value);
+  if(!liveMarker) liveMarker=L.marker(ll,{icon:markerIcon(v,p.speedKmh)}).addTo(liveMap).bindPopup('Current GPS position'); else liveMarker.setLatLng(ll).setIcon(markerIcon(v,p.speedKmh));
   if(!liveAccuracy) liveAccuracy=L.circle(ll,{radius:p.acc||0,weight:1,fillOpacity:.08}).addTo(liveMap); else liveAccuracy.setLatLng(ll).setRadius(p.acc||0);
   const pts=trip.points.map(x=>[x.lat,x.lon]); liveRoute.setLatLngs(pts);
   if(trip.points.length===1) liveMap.setView(ll,16); else liveMap.panTo(ll,{animate:true,duration:.5});
@@ -447,7 +453,7 @@ document.getElementById('startTrip').onclick=()=>{
  if(trip && trip.running){ return alert('GPS tracking is already running. Press Stop Trip to end tracking.'); }
  if(!locationConsent || gpsPermission!=='granted')return alert('Please first choose “Allow Location Access” and grant the browser location permission. Tracking will begin only when you press Start Trip.');
  trip={running:true,points:[],km:0};document.getElementById('startTrip').disabled=true;document.getElementById('stopTrip').disabled=false;document.getElementById('gpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking';document.getElementById('gpsInfo').textContent='Tracking location…';
- watchId=navigator.geolocation.watchPosition(pos=>{const p={lat:pos.coords.latitude,lon:pos.coords.longitude,acc:pos.coords.accuracy,time:Date.now()};const last=trip.points.at(-1);if(last){const d=hav(last,p);if(d>0.002&&d<1)trip.km+=d}trip.points.push(p);const v=vehicle(document.getElementById('tripVehicle').value),fuel=v?trip.km/Number(v.mileage):0,cost=v?fuel*Number(v.rate):0;document.getElementById('tripKm').textContent=trip.km.toFixed(2);document.getElementById('tripFuel').textContent=fuel.toFixed(2);document.getElementById('tripCost').textContent=money(cost);document.getElementById('gpsInfo').textContent=`Lat ${p.lat.toFixed(5)} • Lon ${p.lon.toFixed(5)} • ±${Math.round(p.acc)}m`; updateLiveMap(p)},err=>{document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS error';alert('GPS error: '+err.message);},{enableHighAccuracy:true,maximumAge:3000,timeout:10000});
+ watchId=navigator.geolocation.watchPosition(pos=>{const now=Date.now();const last=trip.points.at(-1);let speedKmh=Number.isFinite(pos.coords.speed)&&pos.coords.speed>=0?pos.coords.speed*3.6:0;if(last&&now>last.time){const d=hav(last,{lat:pos.coords.latitude,lon:pos.coords.longitude});speedKmh=speedKmh||d/((now-last.time)/3600000);}const p={lat:pos.coords.latitude,lon:pos.coords.longitude,acc:pos.coords.accuracy,time:now,speedKmh:Number(speedKmh.toFixed(1))};if(last){const d=hav(last,p);if(d>0.002&&d<1)trip.km+=d}trip.points.push(p);lastSpeedKmh=p.speedKmh;const v=vehicle(document.getElementById('tripVehicle').value),fuel=v?trip.km/Number(v.mileage):0,cost=v?fuel*Number(v.rate):0;document.getElementById('tripKm').textContent=trip.km.toFixed(2);document.getElementById('tripFuel').textContent=fuel.toFixed(2);document.getElementById('tripCost').textContent=money(cost);document.getElementById('gpsSpeed').textContent=p.speedKmh.toFixed(1)+' km/h';document.getElementById('movementMode').textContent=p.speedKmh<=10?'🚶 Walking / stationary':'🚗 Vehicle mode';document.getElementById('gpsInfo').textContent=`Lat ${p.lat.toFixed(5)} • Lon ${p.lon.toFixed(5)} • ±${Math.round(p.acc)}m`; updateLiveMap(p)},err=>{document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS error';alert('GPS error: '+err.message);},{enableHighAccuracy:true,maximumAge:3000,timeout:10000});
 };
 // Keep GPS tracking active while the user navigates between app sections.
 // Tracking is ended only by the explicit Stop Trip button or when the page is closed.
