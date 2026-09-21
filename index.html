@@ -196,7 +196,7 @@ function loadDemoState(){
  }
 }
 let state=loadDemoState();
-let currentUser=null, watchId=null, trip={running:false,points:[],km:0};
+let currentUser=localStorage.getItem('SRD_DL_LOGIN_USER')||null, watchId=null, trip={running:false,points:[],km:0};
 let liveMap=null, liveMarker=null, liveAccuracy=null, liveRoute=null, lastMapPoint=null;
 function loadLeaflet(cb){
   if(window.L){cb();return;}
@@ -237,6 +237,7 @@ function login(){
   loginBusy=true;
   const btn=document.getElementById('loginBtn'); if(btn){btn.disabled=true;btn.innerHTML='Opening…';}
   currentUser=u;
+  localStorage.setItem('SRD_DL_LOGIN_USER',u);
   const loginScreen=document.getElementById('loginScreen');
   const app=document.getElementById('app');
   if(loginScreen) loginScreen.classList.add('d-none');
@@ -252,13 +253,31 @@ function login(){
 }
 document.getElementById('loginBtn').onclick=login;
 document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
+function restoreLogin(){
+ const u=localStorage.getItem('SRD_DL_LOGIN_USER');
+ if(u==='demo'||u==='admin'){
+  currentUser=u;
+  document.getElementById('loginScreen')?.classList.add('d-none');
+  document.getElementById('app')?.classList.remove('d-none');
+  document.getElementById('navAdmin')?.classList.toggle('d-none',u!=='admin');
+  const welcome=document.getElementById('welcome');
+  if(welcome) welcome.textContent=u==='admin'?'Master Administrator':'Welcome, Demo Subscriber';
+  requestAnimationFrame(()=>{try{renderAll();}catch(e){console.error(e);}});
+ }
+}
+restoreLogin();
 document.getElementById('resetDemoBtn').onclick=()=>{
  if(confirm('Reset demo data and restore the default demo account?')){
    localStorage.removeItem(KEY);
    location.reload();
  }
 };
-document.getElementById('logoutBtn').onclick=()=>location.reload();
+document.getElementById('logoutBtn').onclick=()=>{
+ localStorage.removeItem('SRD_DL_LOGIN_USER');
+ currentUser=null;
+ if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null;}
+ location.reload();
+};
 document.querySelectorAll('[data-view]').forEach(x=>x.onclick=()=>showView(x.dataset.view));
 function showView(id){
  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');
