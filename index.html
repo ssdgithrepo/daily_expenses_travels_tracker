@@ -392,10 +392,21 @@ document.getElementById('notNowBtn').onclick=()=>{
 syncBrowserLocationPermission();
 
 document.getElementById('startTrip').onclick=()=>{
+ if(trip && trip.running){ return alert('GPS tracking is already running. Press Stop Trip to end tracking.'); }
  if(!locationConsent || gpsPermission!=='granted')return alert('Please first choose “Allow Location Access” and grant the browser location permission. Tracking will begin only when you press Start Trip.');
  trip={running:true,points:[],km:0};document.getElementById('startTrip').disabled=true;document.getElementById('stopTrip').disabled=false;document.getElementById('gpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking';document.getElementById('gpsInfo').textContent='Tracking location…';
  watchId=navigator.geolocation.watchPosition(pos=>{const p={lat:pos.coords.latitude,lon:pos.coords.longitude,acc:pos.coords.accuracy,time:Date.now()};const last=trip.points.at(-1);if(last){const d=hav(last,p);if(d>0.002&&d<1)trip.km+=d}trip.points.push(p);const v=vehicle(document.getElementById('tripVehicle').value),fuel=v?trip.km/Number(v.mileage):0,cost=v?fuel*Number(v.rate):0;document.getElementById('tripKm').textContent=trip.km.toFixed(2);document.getElementById('tripFuel').textContent=fuel.toFixed(2);document.getElementById('tripCost').textContent=money(cost);document.getElementById('gpsInfo').textContent=`Lat ${p.lat.toFixed(5)} • Lon ${p.lon.toFixed(5)} • ±${Math.round(p.acc)}m`},err=>{document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS error';alert('GPS error: '+err.message);},{enableHighAccuracy:true,maximumAge:3000,timeout:10000});
 };
+// Keep GPS tracking active while the user navigates between app sections.
+// Tracking is ended only by the explicit Stop Trip button or when the page is closed.
+window.addEventListener('beforeunload', (event)=>{
+ if(trip && trip.running){
+   event.preventDefault();
+   event.returnValue='GPS tracking is active. Stop the trip before leaving this page.';
+   return event.returnValue;
+ }
+});
+
 document.getElementById('stopTrip').onclick=()=>{
  if(watchId!==null)navigator.geolocation.clearWatch(watchId);watchId=null;
  const v=vehicle(document.getElementById('tripVehicle').value);const fuel=v?trip.km/v.mileage:0,cost=v?fuel*v.rate:0;
