@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SRD DriveLedger — Expense & GPS Tracker</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+:root{--brand:#0d6efd;--dark:#0b1320;--bg:#f4f7fb}
+body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
+.sidebar{min-height:100vh;background:linear-gradient(180deg,#0b1320,#152238);color:#fff}
+.sidebar .nav-link{color:#cbd5e1;border-radius:10px;margin:3px 0}
+.sidebar .nav-link.active,.sidebar .nav-link:hover{background:#1d4ed8;color:#fff}
+.brand{font-weight:800;letter-spacing:.3px}.card{border:0;border-radius:16px;box-shadow:0 5px 22px rgba(15,23,42,.07)}
+.metric{font-size:1.7rem;font-weight:800}.muted{color:#64748b}.view{display:none}.view.active{display:block}
+.table-responsive{border-radius:12px}.gps-dot{width:11px;height:11px;border-radius:50%;display:inline-block;background:#dc3545}.gps-dot.on{background:#198754;box-shadow:0 0 0 5px rgba(25,135,84,.12)}
+.login-wrap{min-height:100vh;background:radial-gradient(circle at 10% 10%,#dbeafe,transparent 35%),radial-gradient(circle at 90% 90%,#dcfce7,transparent 35%),#f8fafc}
+.login-card{max-width:460px;width:100%;border-radius:24px}
+.mapbox{height:260px;border-radius:16px;background:repeating-linear-gradient(45deg,#eef2f7,#eef2f7 10px,#e7edf5 10px,#e7edf5 20px);display:flex;align-items:center;justify-content:center;color:#64748b}
+.footer{font-size:.8rem;color:#94a3b8}
+@media(max-width:991px){.sidebar{min-height:auto}.sidebar .collapse-menu{display:none}.mobile-nav{display:block!important}}
+</style>
+</head>
+<body>
+<div id="loginScreen" class="login-wrap d-flex align-items-center justify-content-center p-3">
+  <div class="card login-card p-4 p-md-5">
+    <div class="text-center mb-4">
+      <div class="display-6 text-primary"><i class="bi bi-speedometer2"></i></div>
+      <h2 class="brand mb-1">SRD DriveLedger</h2>
+      <div class="muted">Daily Expenses • Vehicle • GPS Trips</div>
+    </div>
+    <div class="alert alert-info py-2"><i class="bi bi-info-circle"></i> Demo mode is enabled. No Google Sheet is required for testing.</div>
+    <label class="form-label">Username</label>
+    <input id="loginUser" class="form-control mb-3" value="demo">
+    <label class="form-label">Password</label>
+    <input id="loginPass" type="password" class="form-control mb-3" value="demo123">
+    <button id="loginBtn" class="btn btn-primary w-100 py-2"><i class="bi bi-box-arrow-in-right"></i> Sign in</button>
+    <div class="text-center mt-3 small text-muted">Demo admin: <b>admin</b> / <b>admin123</b><br>Demo subscriber: <b>demo</b> / <b>demo123</b></div><button id="resetDemoBtn" class="btn btn-sm btn-outline-secondary w-100 mt-3">Reset Demo Data</button>
+    <div class="text-center mt-4 footer">Powered by <b>SRD Sons Tech</b></div>
+  </div>
+</div>
+
+<div id="app" class="d-none">
+<div class="container-fluid">
+<div class="row">
+<aside class="col-lg-2 sidebar p-3">
+  <div class="d-flex align-items-center gap-2 mb-4"><i class="bi bi-geo-alt-fill fs-3 text-info"></i><div><div class="brand">SRD DriveLedger</div><small class="text-secondary">SRD Sons Tech</small></div></div>
+  <div class="small text-uppercase text-secondary mb-2">Workspace</div>
+  <nav id="navUser" class="nav flex-column">
+    <a class="nav-link active" data-view="dashboard"><i class="bi bi-grid me-2"></i>Dashboard</a>
+    <a class="nav-link" data-view="expenses"><i class="bi bi-receipt me-2"></i>Expenses</a>
+    <a class="nav-link" data-view="vehicles"><i class="bi bi-car-front me-2"></i>Vehicles</a>
+    <a class="nav-link" data-view="trip"><i class="bi bi-signpost-2 me-2"></i>GPS Trip</a>
+    <a class="nav-link" data-view="trips"><i class="bi bi-clock-history me-2"></i>Trip History</a>
+    <a class="nav-link" data-view="reports"><i class="bi bi-bar-chart me-2"></i>Reports</a>
+    <a class="nav-link" data-view="settings"><i class="bi bi-gear me-2"></i>Settings</a>
+  </nav>
+  <nav id="navAdmin" class="nav flex-column d-none">
+    <div class="small text-uppercase text-secondary mt-3 mb-2">Master Admin</div>
+    <a class="nav-link" data-view="admin"><i class="bi bi-shield-lock me-2"></i>Admin Console</a>
+  </nav>
+  <div class="mt-5 pt-5"><button id="logoutBtn" class="btn btn-outline-light w-100"><i class="bi bi-box-arrow-left"></i> Logout</button></div>
+</aside>
+
+<main class="col-lg-10 p-3 p-md-4">
+<header class="d-flex justify-content-between align-items-center mb-4">
+  <div><h3 id="pageTitle" class="mb-1">Dashboard</h3><div class="muted small" id="welcome"></div></div>
+  <div class="d-flex gap-2 align-items-center"><span class="badge text-bg-success">Demo Mode</span><button class="btn btn-light" onclick="showView('settings')"><i class="bi bi-person-circle"></i></button></div>
+</header>
+
+<section id="dashboard" class="view active">
+ <div class="row g-3">
+  <div class="col-md-3"><div class="card p-3"><div class="muted">This Month Expense</div><div id="mExpense" class="metric">₹0</div><small class="text-success">All categories</small></div></div>
+  <div class="col-md-3"><div class="card p-3"><div class="muted">Distance</div><div id="mDistance" class="metric">0 km</div><small>Tracked trips</small></div></div>
+  <div class="col-md-3"><div class="card p-3"><div class="muted">Fuel Cost</div><div id="mFuel" class="metric">₹0</div><small>Estimated from mileage</small></div></div>
+  <div class="col-md-3"><div class="card p-3"><div class="muted">Active Vehicle</div><div id="mVehicle" class="metric">—</div><small>Selected vehicle</small></div></div>
+ </div>
+ <div class="row g-3 mt-1">
+  <div class="col-lg-7"><div class="card p-4"><div class="d-flex justify-content-between"><h5>Recent Expenses</h5><button class="btn btn-sm btn-primary" onclick="showView('expenses')">Add expense</button></div><div class="table-responsive mt-3"><table class="table align-middle"><thead><tr><th>Date</th><th>Category</th><th>Note</th><th class="text-end">Amount</th></tr></thead><tbody id="recentExpenses"></tbody></table></div></div></div>
+  <div class="col-lg-5"><div class="card p-4"><h5>Quick Start</h5><div class="d-grid gap-2 mt-3"><button class="btn btn-outline-primary text-start" onclick="showView('trip')"><i class="bi bi-play-circle me-2"></i>Start GPS trip</button><button class="btn btn-outline-primary text-start" onclick="showView('expenses')"><i class="bi bi-plus-circle me-2"></i>Record expense</button><button class="btn btn-outline-primary text-start" onclick="showView('vehicles')"><i class="bi bi-car-front me-2"></i>Add vehicle</button></div><hr><small class="muted">GPS uses your browser/device location permission. Keep this page active during a trip for the most reliable demo tracking.</small></div></div>
+ </div>
+</section>
+
+<section id="expenses" class="view">
+<div class="card p-4">
+ <div class="d-flex justify-content-between align-items-center mb-3"><h5>Daily Expense Tracker</h5><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#expenseModal"><i class="bi bi-plus"></i> Add Expense</button></div>
+ <div class="row g-2 mb-3"><div class="col-md-3"><input id="expenseSearch" class="form-control" placeholder="Search"></div><div class="col-md-3"><select id="expenseFilter" class="form-select"><option value="">All categories</option><option>Fuel</option><option>Food</option><option>Repair</option><option>Toll</option><option>Parking</option><option>Other</option></select></div></div>
+ <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Date</th><th>Category</th><th>Vehicle</th><th>Note</th><th>Payment</th><th class="text-end">Amount</th><th></th></tr></thead><tbody id="expenseRows"></tbody></table></div>
+</div></section>
+
+<section id="vehicles" class="view">
+<div class="card p-4"><div class="d-flex justify-content-between align-items-center mb-3"><h5>Vehicle Master</h5><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#vehicleModal"><i class="bi bi-plus"></i> Add Vehicle</button></div>
+<div class="alert alert-light border"><i class="bi bi-calculator me-2"></i> Fuel cost formula: <b>Distance ÷ Mileage × Fuel Rate</b>. Set the actual local fuel rate and vehicle efficiency below.</div>
+<div class="table-responsive"><table class="table align-middle"><thead><tr><th>Vehicle</th><th>Type</th><th>Fuel</th><th>Mileage</th><th>Rate</th><th>Status</th><th></th></tr></thead><tbody id="vehicleRows"></tbody></table></div></div></section>
+
+<section id="trip" class="view">
+<div class="row g-3"><div class="col-lg-7"><div class="card p-4">
+<div class="d-flex justify-content-between"><h5>Live GPS Trip</h5><span id="gpsStatus"><span class="gps-dot"></span> GPS idle</span></div>
+<div class="row g-2 mt-2"><div class="col-md-6"><label class="form-label">Vehicle</label><select id="tripVehicle" class="form-select"></select></div><div class="col-md-6"><label class="form-label">Purpose</label><input id="tripPurpose" class="form-control" placeholder="Delivery / personal / field work"></div></div>
+<div id="permissionBox" class="alert alert-primary mt-3">
+  <div class="d-flex gap-2">
+    <i class="bi bi-shield-check fs-3"></i>
+    <div>
+      <b>Location Tracking Permission</b>
+      <div class="small mt-1">
+        SRD DriveLedger will ask your browser for location access to calculate the distance travelled,
+        vehicle mileage and estimated fuel cost for this trip.
+      </div>
+      <div class="small mt-2"><b>Your browser decides whether to show the permission prompt. Your location will NOT be tracked or recorded for a trip until you grant permission and press “Start Trip”.</b></div>
+      <div class="mt-2"><span class="badge text-bg-secondary" id="permissionState">Not Requested</span></div>
+    </div>
+  </div>
+  <div class="d-flex flex-wrap gap-2 mt-3">
+    <button id="permissionBtn" class="btn btn-primary"><i class="bi bi-geo-alt-fill"></i> Ask Browser for Location Access</button>
+    <button id="notNowBtn" class="btn btn-outline-secondary">Not Now</button>
+    <button id="retryLocationBtn" class="btn btn-outline-primary d-none"><i class="bi bi-arrow-repeat"></i> Check Again</button>
+  </div>
+  <div id="browserAskStatus" class="small border rounded p-2 mt-3 bg-white">
+    <i class="bi bi-browser-chrome"></i>
+    <b>Browser location permission:</b>
+    <span id="browserAskText">Ask first — the browser can request your location.</span>
+    <span id="browserPermissionBadge" class="badge text-bg-secondary ms-1">ASK FIRST</span>
+  </div>
+  <div id="locationHelp" class="mt-3 d-none">
+    <div class="card border-0 bg-light">
+      <div class="card-body py-3">
+        <div class="fw-semibold mb-2"><i class="bi bi-gear"></i> Enable location for this website</div>
+        <div class="small mb-2">If you previously selected <b>Block</b>, the browser may not show the permission popup again. Use the browser's site permission/settings for this website, allow <b>Location</b>, then return here and tap <b>Check Again</b>.</div>
+        <ul class="small mb-0 ps-3">
+          <li><b>Chrome / Edge:</b> open the site → tap/click the lock or site-controls icon near the address bar → Site permissions / Permissions → Location → Allow → reload or Check Again.</li>
+          <li><b>Firefox:</b> open the site → site information/lock icon → Permissions → Location → Allow → reload or Check Again.</li>
+          <li><b>Safari:</b> use Safari website settings / Website Settings → Location → Allow, then return to this page.</li>
+          <li><b>Android/iPhone:</b> if the browser itself has location disabled, enable Location permission for the browser in the phone's app/privacy settings first.</li>
+        </ul>
+        <div class="small text-muted mt-2"><i class="bi bi-shield-check"></i> The website cannot silently change browser or device permissions. You remain in control.</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="mapbox mt-3"><div class="text-center"><i class="bi bi-geo-alt fs-1"></i><div id="gpsInfo">Location permission has not been requested.</div></div></div>
+<div class="row text-center mt-3"><div class="col-4"><div class="metric" id="tripKm">0.00</div><small class="muted">KM</small></div><div class="col-4"><div class="metric" id="tripFuel">0.00</div><small class="muted">Fuel L</small></div><div class="col-4"><div class="metric" id="tripCost">₹0</div><small class="muted">Fuel Cost</small></div></div>
+<div class="d-flex gap-2 mt-4"><button id="startTrip" class="btn btn-success flex-fill" disabled><i class="bi bi-play-fill"></i> Start Trip</button><button id="stopTrip" class="btn btn-danger flex-fill" disabled><i class="bi bi-stop-fill"></i> Stop & Save</button></div>
+</div></div>
+<div class="col-lg-5"><div class="card p-4"><h5>How it works</h5><ol class="small mt-3"><li>Choose your vehicle.</li><li>Allow browser location permission.</li><li>Start the trip.</li><li>The app accumulates GPS distance using successive coordinates.</li><li>Stop to save trip and calculate estimated fuel/cost.</li></ol><div class="alert alert-warning small">Browser GPS accuracy varies. For production use, HTTPS is required by most browsers for location access.</div></div></div></div>
+</section>
+
+<section id="trips" class="view"><div class="card p-4"><h5>Trip History</h5><div class="table-responsive mt-3"><table class="table align-middle"><thead><tr><th>Date</th><th>Vehicle</th><th>Purpose</th><th>Distance</th><th>Fuel</th><th>Fuel Cost</th></tr></thead><tbody id="tripRows"></tbody></table></div></div></section>
+
+<section id="reports" class="view"><div class="row g-3"><div class="col-md-6"><div class="card p-4"><h5>Expense Summary</h5><div id="reportExpense"></div></div></div><div class="col-md-6"><div class="card p-4"><h5>Vehicle Running Summary</h5><div id="reportVehicle"></div></div></div></div></section>
+
+<section id="settings" class="view"><div class="card p-4"><h5>Settings</h5><div class="row g-3 mt-1"><div class="col-md-6"><label class="form-label">Default petrol rate (₹/L)</label><input id="defaultRate" type="number" class="form-control"></div><div class="col-md-6"><label class="form-label">Currency</label><input class="form-control" value="INR (₹)" disabled></div><div class="col-12"><button class="btn btn-primary" onclick="saveSettings()">Save Settings</button></div></div><hr><h6>Google Sheets Production Mode</h6><p class="small muted">Paste your deployed Google Apps Script Web App URL in the backend configuration when moving from Demo Mode.</p></div></section>
+
+<section id="admin" class="view"><div class="card p-4"><div class="d-flex justify-content-between"><div><h5>Master Admin Console</h5><div class="muted small">Subscriber authentication and plan control</div></div><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#userModal"><i class="bi bi-person-plus"></i> Create Subscriber</button></div>
+<div class="table-responsive mt-3"><table class="table align-middle"><thead><tr><th>Business</th><th>Username</th><th>Plan</th><th>Expiry</th><th>Status</th><th></th></tr></thead><tbody id="userRows"></tbody></table></div>
+</div></section>
+
+<div class="text-center mt-4 footer">© 2026 SRD Sons Tech • SRD DriveLedger • Demo application</div>
+</main></div></div>
+
+<!-- Expense Modal -->
+<div class="modal fade" id="expenseModal"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5>Add Expense</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="form-label">Date</label><input id="eDate" type="date" class="form-control mb-2"><label class="form-label">Category</label><select id="eCat" class="form-select mb-2"><option>Fuel</option><option>Food</option><option>Repair</option><option>Toll</option><option>Parking</option><option>Other</option></select><label class="form-label">Vehicle</label><select id="eVehicle" class="form-select mb-2"></select><label class="form-label">Amount</label><input id="eAmount" type="number" min="0" class="form-control mb-2"><label class="form-label">Payment</label><select id="ePayment" class="form-select mb-2"><option>Cash</option><option>UPI</option><option>Card</option><option>Bank</option></select><label class="form-label">Note</label><input id="eNote" class="form-control"></div><div class="modal-footer"><button class="btn btn-primary" onclick="addExpense()">Save</button></div></div></div></div>
+<!-- Vehicle Modal -->
+<div class="modal fade" id="vehicleModal"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5>Add Vehicle</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input id="vName" class="form-control mb-2" placeholder="Vehicle name/number"><select id="vType" class="form-select mb-2"><option>Two Wheeler</option><option>Three Wheeler</option><option>Car</option><option>Pickup</option><option>Truck</option><option>Bus</option><option>Other</option></select><select id="vFuel" class="form-select mb-2"><option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option></select><label class="form-label">Mileage / Efficiency</label><input id="vMileage" type="number" min="0.1" step="0.1" class="form-control mb-2" placeholder="km per litre (or km/kWh)"><label class="form-label">Fuel/Energy Rate ₹</label><input id="vRate" type="number" min="0" step="0.01" class="form-control"></div><div class="modal-footer"><button class="btn btn-primary" onclick="addVehicle()">Save Vehicle</button></div></div></div></div>
+<!-- User Modal -->
+<div class="modal fade" id="userModal"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5>Create Subscriber</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input id="uBusiness" class="form-control mb-2" placeholder="Business name"><input id="uName" class="form-control mb-2" placeholder="Username"><input id="uPass" class="form-control mb-2" placeholder="Temporary password"><select id="uPlan" class="form-select mb-2"><option>Starter</option><option>Professional</option><option>Enterprise</option></select><select id="uStatus" class="form-select"><option>Active</option><option>Pending</option></select></div><div class="modal-footer"><button class="btn btn-primary" onclick="addUser()">Create</button></div></div></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const KEY='srd_driveledger_demo_v1';
+const DEMO_DEFAULTS={
+ settings:{rate:105},
+ vehicles:[
+  {id:1,name:'MH-31 AB 1234',type:'Two Wheeler',fuel:'Petrol',mileage:45,rate:105,active:true},
+  {id:2,name:'MH-31 XY 5678',type:'Three Wheeler',fuel:'CNG',mileage:28,rate:92,active:true}
+ ],
+ expenses:[
+  {id:1,date:new Date().toISOString().slice(0,10),cat:'Fuel',vehicleId:1,note:'Demo fuel',payment:'UPI',amount:500},
+  {id:2,date:new Date().toISOString().slice(0,10),cat:'Toll',vehicleId:1,note:'Highway toll',payment:'Cash',amount:120}
+ ],
+ trips:[],
+ users:[{business:'Demo Krushi/Field Services',username:'demo',plan:'Professional',expiry:'2026-12-31',status:'Active'}]
+};
+function loadDemoState(){
+ try{
+   const raw=localStorage.getItem(KEY);
+   if(!raw) return JSON.parse(JSON.stringify(DEMO_DEFAULTS));
+   const parsed=JSON.parse(raw);
+   if(!parsed || typeof parsed!=='object') throw new Error('Invalid demo data');
+   return Object.assign(JSON.parse(JSON.stringify(DEMO_DEFAULTS)),parsed);
+ }catch(e){
+   localStorage.removeItem(KEY);
+   return JSON.parse(JSON.stringify(DEMO_DEFAULTS));
+ }
+}
+let state=loadDemoState();
+let currentUser=null, watchId=null, trip={running:false,points:[],km:0};
+
+function persist(){localStorage.setItem(KEY,JSON.stringify(state))}
+function money(n){return '₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}
+function vehicle(id){return state.vehicles.find(v=>String(v.id)===String(id))}
+function hav(a,b){const R=6371, p=Math.PI/180, dLat=(b.lat-a.lat)*p,dLon=(b.lon-a.lon)*p;const x=Math.sin(dLat/2)**2+Math.cos(a.lat*p)*Math.cos(b.lat*p)*Math.sin(dLon/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))}
+function login(){
+ const u=(document.getElementById('loginUser').value||'').trim().toLowerCase();
+ const p=document.getElementById('loginPass').value||'';
+ if((u==='demo'&&p==='demo123')||(u==='admin'&&p==='admin123')){
+  currentUser=u;
+  const loginScreen=document.getElementById('loginScreen');
+  const app=document.getElementById('app');
+  if(loginScreen) loginScreen.classList.add('d-none');
+  if(app) app.classList.remove('d-none');
+  const navAdmin=document.getElementById('navAdmin');
+  if(navAdmin) navAdmin.classList.toggle('d-none',u!=='admin');
+  const welcome=document.getElementById('welcome');
+  if(welcome) welcome.textContent=u==='admin'?'Master Administrator':'Welcome, Demo Subscriber';
+  try{ renderAll(); }catch(e){ console.error(e); alert('Login successful, but the dashboard could not finish loading. Please refresh once.'); }
+ } else {
+  alert('Invalid demo credentials.\nSubscriber: demo / demo123\nAdmin: admin / admin123');
+ }
+}
+document.getElementById('loginBtn').onclick=login;
+document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
+document.getElementById('resetDemoBtn').onclick=()=>{
+ if(confirm('Reset demo data and restore the default demo account?')){
+   localStorage.removeItem(KEY);
+   location.reload();
+ }
+};
+document.getElementById('logoutBtn').onclick=()=>location.reload();
+document.querySelectorAll('[data-view]').forEach(x=>x.onclick=()=>showView(x.dataset.view));
+function showView(id){
+ document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');
+ document.querySelectorAll('[data-view]').forEach(v=>v.classList.toggle('active',v.dataset.view===id));
+ const titles={dashboard:'Dashboard',expenses:'Daily Expenses',vehicles:'Vehicle Master',trip:'GPS Trip',trips:'Trip History',reports:'Reports',settings:'Settings',admin:'Master Admin Console'};
+ document.getElementById('pageTitle').textContent=titles[id]||id;
+ if(id==='reports')renderReports();
+}
+function renderAll(){renderDashboard();renderExpenses();renderVehicles();renderSelects();renderTrips();renderUsers();document.getElementById('defaultRate').value=state.settings.rate}
+function renderDashboard(){
+ const total=state.expenses.reduce((s,e)=>s+Number(e.amount),0), dist=state.trips.reduce((s,t)=>s+t.km,0), fuel=state.trips.reduce((s,t)=>s+t.fuel,0), cost=state.trips.reduce((s,t)=>s+t.cost,0);
+ document.getElementById('mExpense').textContent=money(total);document.getElementById('mDistance').textContent=dist.toFixed(1)+' km';document.getElementById('mFuel').textContent=money(cost);document.getElementById('mVehicle').textContent=state.vehicles.find(v=>v.active)?.name||'—';
+ document.getElementById('recentExpenses').innerHTML=state.expenses.slice(-6).reverse().map(e=>`<tr><td>${e.date}</td><td>${e.cat}</td><td>${e.note||''}</td><td class="text-end">${money(e.amount)}</td></tr>`).join('')||'<tr><td colspan=4 class="text-center muted">No expenses</td></tr>';
+}
+function renderExpenses(){
+ const q=(document.getElementById('expenseSearch')?.value||'').toLowerCase(),f=document.getElementById('expenseFilter')?.value||'';
+ document.getElementById('expenseRows').innerHTML=state.expenses.filter(e=>(!q||(e.note||'').toLowerCase().includes(q)||e.cat.toLowerCase().includes(q))&&(!f||e.cat===f)).slice().reverse().map(e=>`<tr><td>${e.date}</td><td>${e.cat}</td><td>${vehicle(e.vehicleId)?.name||'-'}</td><td>${e.note||''}</td><td>${e.payment}</td><td class="text-end">${money(e.amount)}</td><td><button class="btn btn-sm btn-outline-danger" onclick="delExpense(${e.id})"><i class="bi bi-trash"></i></button></td></tr>`).join('')||'<tr><td colspan=7 class="text-center muted">No matching expenses</td></tr>';
+}
+document.getElementById('expenseSearch').oninput=renderExpenses;document.getElementById('expenseFilter').onchange=renderExpenses;
+function renderVehicles(){document.getElementById('vehicleRows').innerHTML=state.vehicles.map(v=>`<tr><td><b>${v.name}</b></td><td>${v.type}</td><td>${v.fuel}</td><td>${v.mileage}</td><td>${money(v.rate)}</td><td><span class="badge ${v.active?'text-bg-success':'text-bg-secondary'}">${v.active?'Active':'Inactive'}</span></td><td><button class="btn btn-sm btn-outline-danger" onclick="delVehicle(${v.id})">Delete</button></td></tr>`).join('')}
+function renderSelects(){const opts=state.vehicles.map(v=>`<option value="${v.id}">${v.name} — ${v.type}</option>`).join('');document.getElementById('tripVehicle').innerHTML=opts;document.getElementById('eVehicle').innerHTML='<option value="">General</option>'+opts}
+function addVehicle(){const v={id:Date.now(),name:document.getElementById('vName').value.trim(),type:document.getElementById('vType').value,fuel:document.getElementById('vFuel').value,mileage:Number(document.getElementById('vMileage').value),rate:Number(document.getElementById('vRate').value)||state.settings.rate,active:true};if(!v.name||!v.mileage)return alert('Enter vehicle name and mileage.');state.vehicles.push(v);persist();bootstrap.Modal.getInstance(document.getElementById('vehicleModal')).hide();renderAll()}
+function delVehicle(id){if(confirm('Delete vehicle?')){state.vehicles=state.vehicles.filter(v=>v.id!==id);persist();renderAll()}}
+function addExpense(){const e={id:Date.now(),date:document.getElementById('eDate').value||new Date().toISOString().slice(0,10),cat:document.getElementById('eCat').value,vehicleId:document.getElementById('eVehicle').value,note:document.getElementById('eNote').value,payment:document.getElementById('ePayment').value,amount:Number(document.getElementById('eAmount').value)};if(!e.amount)return alert('Enter amount.');state.expenses.push(e);persist();bootstrap.Modal.getInstance(document.getElementById('expenseModal')).hide();renderAll()}
+function delExpense(id){state.expenses=state.expenses.filter(e=>e.id!==id);persist();renderAll()}
+let gpsPermission='not-requested';
+let locationConsent=false;
+
+function setPermissionUI(state, message){
+ gpsPermission=state;
+ const badge=document.getElementById('permissionState'), btn=document.getElementById('permissionBtn'), start=document.getElementById('startTrip'), info=document.getElementById('gpsInfo');
+ const map={granted:['Granted','text-bg-success'],denied:['Denied','text-bg-danger'],prompt:['Not Requested','text-bg-secondary'],unsupported:['Unsupported','text-bg-danger']};
+ const item=map[state]||map.prompt;
+ badge.textContent=item[0]; badge.className='badge '+item[1];
+ if(state==='granted'){btn.classList.add('d-none');start.disabled=!locationConsent;info.textContent=message||'Location access granted. You can start the trip.';}
+ else if(state==='denied'){btn.classList.remove('d-none');start.disabled=true;info.textContent=message||'Location access was denied. Enable location permission in browser settings and try again.';}
+ else if(state==='unsupported'){btn.classList.add('d-none');start.disabled=true;info.textContent='This browser/device does not support location services.';}
+ else {btn.classList.remove('d-none');start.disabled=true;info.textContent=message||'Location permission has not been requested.';}
+}
+
+async function syncBrowserLocationPermission(){
+ if(!navigator.geolocation){
+   updateBrowserAskStatus('denied');
+   setPermissionUI('unsupported','This browser/device does not support location services.');
+   return 'unsupported';
+ }
+ try{
+   if(navigator.permissions && navigator.permissions.query){
+     const result=await navigator.permissions.query({name:'geolocation'});
+     updateBrowserAskStatus(result.state);
+     setPermissionUI(result.state);
+     showLocationHelp(result.state==='denied');
+     result.onchange=()=>{
+       updateBrowserAskStatus(result.state);
+       setPermissionUI(result.state);
+       showLocationHelp(result.state==='denied');
+     };
+     return result.state;
+   }
+ }catch(e){}
+ updateBrowserAskStatus('prompt');
+ return 'prompt';
+}
+
+function requestGPSPermission(){
+ // Native browser prompts require a secure context (HTTPS) and a real user click.
+ if(!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1'){
+   setPermissionUI('denied','Browser location permission can only be requested on HTTPS (or localhost). Open this application using its HTTPS web-app URL, then tap Allow.');
+   showLocationHelp(true);
+   return;
+ }
+ if(!navigator.geolocation){
+   setPermissionUI('unsupported','This browser/device does not support location services.');
+   showLocationHelp(true);
+   return;
+ }
+
+ const btn=document.getElementById('permissionBtn');
+ const retry=document.getElementById('retryLocationBtn');
+ btn.disabled=true;
+ btn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span> Waiting for browser permission…';
+
+ // This is deliberately the first location API call made after the
+ // user's button click. Do not put an awaited permission check before it.
+ navigator.geolocation.getCurrentPosition(
+   pos=>{
+     locationConsent=true;
+     setPermissionUI('granted',
+       `Location access granted • ±${Math.round(pos.coords.accuracy)}m accuracy. Tap Start Trip when you are ready.`);
+     updateBrowserAskStatus('granted');
+     showLocationHelp(false);
+     document.getElementById('gpsStatus').innerHTML='<span class="gps-dot on"></span> Location ready';
+     btn.disabled=false;
+     btn.innerHTML='<i class="bi bi-geo-alt-fill"></i> Location Access Granted';
+     retry.classList.add('d-none');
+   },
+   err=>{
+     btn.disabled=false;
+     btn.innerHTML='<i class="bi bi-geo-alt-fill"></i> Ask Browser for Location Access';
+
+     if(err.code===1){
+       locationConsent=false;
+       setPermissionUI('denied',
+         'Location permission was denied or blocked. If the browser shows a prompt, choose Allow. If no prompt appears, open this site’s browser permissions, set Location to Allow/Ask, then tap Try Again.');
+       updateBrowserAskStatus('denied');
+       showLocationHelp(true);
+       retry.classList.remove('d-none');
+     }else if(err.code===2){
+       setPermissionUI('prompt',
+         'The browser could not obtain a location fix. Check the phone Location/GPS setting and try again.');
+       showLocationHelp(true);
+       retry.classList.remove('d-none');
+     }else if(err.code===3){
+       setPermissionUI('prompt',
+         'The location request timed out. Check Location/GPS services and try again.');
+       retry.classList.remove('d-none');
+     }else{
+       setPermissionUI('prompt','The browser could not obtain your location. Please try again.');
+       retry.classList.remove('d-none');
+     }
+   },
+   {
+     enableHighAccuracy:true,
+     maximumAge:0,
+     timeout:20000
+   }
+ );
+}
+
+function showLocationHelp(show){
+ const el=document.getElementById('locationHelp');
+ if(el) el.classList.toggle('d-none',!show);
+}
+
+document.getElementById('permissionBtn').onclick=()=>{
+ locationConsent=false;
+ showLocationHelp(false);
+
+ // IMPORTANT: call the browser geolocation API directly from the user's click.
+ // This allows Chrome/Edge/Firefox/Safari to show their native
+ // "Allow / Don't allow" location permission dialog when the site is in
+ // the browser's "Ask first / Sites can ask" state.
+ requestGPSPermission();
+};
+document.getElementById('retryLocationBtn').onclick=()=>{
+ // Always call the native API directly from the user gesture.
+ // If permission was previously blocked, the browser will require the user
+ // to change this site's Location setting before it can show the prompt again.
+ locationConsent=false;
+ showLocationHelp(false);
+ requestGPSPermission();
+};
+document.getElementById('notNowBtn').onclick=()=>{
+ locationConsent=false;
+ document.getElementById('startTrip').disabled=true;
+ document.getElementById('gpsInfo').textContent='Location tracking is off. No GPS trip is being recorded. You can enable it later.';
+ document.getElementById('permissionState').textContent='Not Requested';
+ document.getElementById('permissionState').className='badge text-bg-secondary';
+ document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS not enabled';
+ showLocationHelp(false);
+};
+// Read the status for display only. The permission button always calls getCurrentPosition directly.
+syncBrowserLocationPermission();
+
+document.getElementById('startTrip').onclick=()=>{
+ if(!locationConsent || gpsPermission!=='granted')return alert('Please first choose “Allow Location Access” and grant the browser location permission. Tracking will begin only when you press Start Trip.');
+ trip={running:true,points:[],km:0};document.getElementById('startTrip').disabled=true;document.getElementById('stopTrip').disabled=false;document.getElementById('gpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking';document.getElementById('gpsInfo').textContent='Tracking location…';
+ watchId=navigator.geolocation.watchPosition(pos=>{const p={lat:pos.coords.latitude,lon:pos.coords.longitude,acc:pos.coords.accuracy,time:Date.now()};const last=trip.points.at(-1);if(last){const d=hav(last,p);if(d>0.002&&d<1)trip.km+=d}trip.points.push(p);const v=vehicle(document.getElementById('tripVehicle').value),fuel=v?trip.km/Number(v.mileage):0,cost=v?fuel*Number(v.rate):0;document.getElementById('tripKm').textContent=trip.km.toFixed(2);document.getElementById('tripFuel').textContent=fuel.toFixed(2);document.getElementById('tripCost').textContent=money(cost);document.getElementById('gpsInfo').textContent=`Lat ${p.lat.toFixed(5)} • Lon ${p.lon.toFixed(5)} • ±${Math.round(p.acc)}m`},err=>{document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS error';alert('GPS error: '+err.message);},{enableHighAccuracy:true,maximumAge:3000,timeout:10000});
+};
+document.getElementById('stopTrip').onclick=()=>{
+ if(watchId!==null)navigator.geolocation.clearWatch(watchId);watchId=null;
+ const v=vehicle(document.getElementById('tripVehicle').value);const fuel=v?trip.km/v.mileage:0,cost=v?fuel*v.rate:0;
+ if(trip.km>0){state.trips.push({id:Date.now(),date:new Date().toLocaleString('en-IN'),vehicleId:v?.id,purpose:document.getElementById('tripPurpose').value||'Trip',km:Number(trip.km.toFixed(3)),fuel:Number(fuel.toFixed(3)),cost:Number(cost.toFixed(2)),points:trip.points})}
+ trip.running=false;document.getElementById('startTrip').disabled=false;document.getElementById('stopTrip').disabled=true;document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS idle';persist();renderAll();alert('Trip saved. Distance: '+trip.km.toFixed(2)+' km; Fuel cost: '+money(cost));
+}
+function renderTrips(){document.getElementById('tripRows').innerHTML=state.trips.slice().reverse().map(t=>`<tr><td>${t.date}</td><td>${vehicle(t.vehicleId)?.name||'-'}</td><td>${t.purpose}</td><td>${t.km.toFixed(2)} km</td><td>${t.fuel.toFixed(2)} L</td><td>${money(t.cost)}</td></tr>`).join('')||'<tr><td colspan=6 class="text-center muted">No trips saved</td></tr>'}
+function renderReports(){const cats={};state.expenses.forEach(e=>cats[e.cat]=(cats[e.cat]||0)+Number(e.amount));document.getElementById('reportExpense').innerHTML=Object.entries(cats).map(([k,v])=>`<div class="d-flex justify-content-between border-bottom py-2"><span>${k}</span><b>${money(v)}</b></div>`).join('')||'No data';const vs={};state.trips.forEach(t=>{const n=vehicle(t.vehicleId)?.name||'Unknown';vs[n]=(vs[n]||0)+t.km});document.getElementById('reportVehicle').innerHTML=Object.entries(vs).map(([k,v])=>`<div class="d-flex justify-content-between border-bottom py-2"><span>${k}</span><b>${v.toFixed(1)} km</b></div>`).join('')||'No data'}
+function saveSettings(){state.settings.rate=Number(document.getElementById('defaultRate').value)||105;persist();alert('Settings saved.')}
+function renderUsers(){if(currentUser!=='admin')return;document.getElementById('userRows').innerHTML=state.users.map((u,i)=>`<tr><td>${u.business}</td><td>${u.username}</td><td>${u.plan}</td><td>${u.expiry}</td><td><span class="badge ${u.status==='Active'?'text-bg-success':'text-bg-warning'}">${u.status}</span></td><td><button class="btn btn-sm btn-outline-secondary" onclick="toggleUser(${i})">Toggle</button></td></tr>`).join('')}
+function addUser(){const u={business:document.getElementById('uBusiness').value,username:document.getElementById('uName').value,plan:document.getElementById('uPlan').value,expiry:new Date(Date.now()+30*864e5).toISOString().slice(0,10),status:document.getElementById('uStatus').value};if(!u.business||!u.username)return alert('Enter business and username.');state.users.push(u);persist();bootstrap.Modal.getInstance(document.getElementById('userModal')).hide();renderUsers();alert('Subscriber created. In production, credentials should be generated/stored by the Apps Script backend.')}
+function toggleUser(i){state.users[i].status=state.users[i].status==='Active'?'Pending':'Active';persist();renderUsers()}
+document.getElementById('eDate').value=new Date().toISOString().slice(0,10);
+</script>
+</body>
+</html>
