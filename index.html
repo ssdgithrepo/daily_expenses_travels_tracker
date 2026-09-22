@@ -6,21 +6,44 @@
 <title>SRD DriveLedger — Expense & GPS Tracker</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<link href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
 <style>
 :root{--brand:#0d6efd;--dark:#0b1320;--bg:#f4f7fb}
 body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
-.sidebar{min-height:100vh;background:linear-gradient(180deg,#0b1320,#152238);color:#fff}
-.sidebar .nav-link{color:#cbd5e1;border-radius:10px;margin:3px 0}
+.sidebar{min-height:100vh;background:linear-gradient(180deg,#0b1320,#152238);color:#fff;transition:width .25s ease,transform .3s ease;position:relative}
+.sidebar .nav-link{color:#cbd5e1;border-radius:10px;margin:3px 0;display:flex;align-items:center;white-space:nowrap;overflow:hidden}
 .sidebar .nav-link.active,.sidebar .nav-link:hover{background:#1d4ed8;color:#fff}
 .brand{font-weight:800;letter-spacing:.3px}.card{border:0;border-radius:16px;box-shadow:0 5px 22px rgba(15,23,42,.07)}
 .metric{font-size:1.7rem;font-weight:800}.muted{color:#64748b}.view{display:none}.view.active{display:block}
 .table-responsive{border-radius:12px}.gps-dot{width:11px;height:11px;border-radius:50%;display:inline-block;background:#dc3545}.gps-dot.on{background:#198754;box-shadow:0 0 0 5px rgba(25,135,84,.12)}
 .login-wrap{min-height:100vh;background:radial-gradient(circle at 10% 10%,#dbeafe,transparent 35%),radial-gradient(circle at 90% 90%,#dcfce7,transparent 35%),#f8fafc}
 .login-card{max-width:460px;width:100%;border-radius:24px}
+#sidebarToggle i{transition:transform .2s ease}
+.sidebar-backdrop{position:fixed;inset:0;background:rgba(2,6,23,.55);z-index:1040;opacity:0;pointer-events:none;transition:opacity .25s ease}
+.sidebar-backdrop.show{opacity:1;pointer-events:auto}
+@media(max-width:991.98px){
+  .sidebar{position:fixed;top:0;left:0;height:100vh;width:270px;max-width:82vw;transform:translateX(-105%);z-index:1050;overflow-y:auto;box-shadow:0 0 30px rgba(0,0,0,.35)}
+  .sidebar.show{transform:translateX(0)}
+  body.sidebar-open{overflow:hidden}
+}
+@media(min-width:992px){
+  body.sidebar-collapsed .sidebar{flex:0 0 84px;max-width:84px;width:84px}
+  body.sidebar-collapsed main{flex:0 0 calc(100% - 84px);max-width:calc(100% - 84px)}
+  body.sidebar-collapsed .nav-label,body.sidebar-collapsed .brand-text,body.sidebar-collapsed .workspace-label,body.sidebar-collapsed #logoutBtn .btn-label{display:none}
+  body.sidebar-collapsed .sidebar .nav-link{justify-content:center}
+  body.sidebar-collapsed .sidebar .nav-link i{margin-right:0!important}
+  body.sidebar-collapsed #sidebarClose{display:none}
+}
 .mapbox{height:260px;border-radius:16px;background:repeating-linear-gradient(45deg,#eef2f7,#eef2f7 10px,#e7edf5 10px,#e7edf5 20px);display:flex;align-items:center;justify-content:center;color:#64748b}
-.footer{font-size:.8rem;color:#94a3b8}.nav-toggle{display:none}@media(max-width:991px){.nav-toggle{display:inline-flex}.sidebar{min-height:auto}.sidebar .collapse-menu{display:none}.sidebar.open .collapse-menu{display:block}}
-@media(max-width:991px){.sidebar{min-height:auto}.sidebar .collapse-menu{display:none}.mobile-nav{display:block!important}}
+#tripMap,#walkMap{height:320px;border-radius:16px;z-index:0}
+.footer{font-size:.8rem;color:#94a3b8}
+.mode-badge{font-size:.85rem;padding:.45rem .8rem;border-radius:30px}
+.mode-badge.walking{background:#dcfce7;color:#166534}
+.mode-badge.vehicle{background:#dbeafe;color:#1e3a8a}
+.mode-badge.idle{background:#f1f5f9;color:#475569}
+.paused-banner{background:#fff7ed;border:1px solid #fdba74;color:#9a3412;border-radius:12px;padding:.6rem .9rem;font-size:.85rem}
+.fuel-log-item{font-size:.82rem;border-bottom:1px dashed #e2e8f0;padding:.3rem 0}
+.hidden-mode{display:none!important}
 </style>
 </head>
 <body>
@@ -45,64 +68,122 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 <div id="app" class="d-none">
 <div class="container-fluid">
 <div class="row">
-<aside id="sideBar" class="col-lg-2 sidebar p-3">
-  <div class="d-flex align-items-center gap-2 mb-4"><i class="bi bi-geo-alt-fill fs-3 text-info"></i><div><div class="brand">SRD DriveLedger</div><small class="text-secondary">SRD Sons Tech</small></div></div>
-  <div class="d-flex justify-content-between align-items-center mb-2"><div class="small text-uppercase text-secondary">Workspace</div><button id="navToggle" class="btn btn-sm btn-outline-light nav-toggle" type="button" aria-expanded="true" aria-controls="navWrap"><i class="bi bi-list"></i></button></div>
-  <div id="navWrap" class="collapse-menu">
+<aside id="sidebar" class="col-lg-2 sidebar p-3">
+  <button id="sidebarClose" class="btn-close btn-close-white d-lg-none position-absolute" style="top:1rem;right:1rem" aria-label="Close menu"></button>
+  <div class="d-flex align-items-center gap-2 mb-4"><i class="bi bi-geo-alt-fill fs-3 text-info"></i><div class="brand-text"><div class="brand">SRD DriveLedger</div><small class="text-secondary">SRD Sons Tech</small></div></div>
+  <div class="small text-uppercase text-secondary mb-2 workspace-label">Workspace</div>
   <nav id="navUser" class="nav flex-column">
-    <a class="nav-link active" data-view="dashboard"><i class="bi bi-grid me-2"></i>Dashboard</a>
-    <a class="nav-link" data-view="expenses"><i class="bi bi-receipt me-2"></i>Expenses</a>
-    <a class="nav-link" data-view="vehicles"><i class="bi bi-car-front me-2"></i>Vehicles</a>
-    <a class="nav-link" data-view="trip"><i class="bi bi-signpost-2 me-2"></i>GPS Trip</a>
-    <a class="nav-link" data-view="trips"><i class="bi bi-clock-history me-2"></i>Trip History</a>
-    <a class="nav-link" data-view="reports"><i class="bi bi-bar-chart me-2"></i>Reports</a>
-    <a class="nav-link" data-view="settings"><i class="bi bi-gear me-2"></i>Settings</a>
-    <a class="nav-link" data-view="help"><i class="bi bi-question-circle me-2"></i>Help & Guide</a>
+    <a class="nav-link active" data-view="dashboard" title="Dashboard"><i class="bi bi-speedometer2 me-2"></i><span class="nav-label">Dashboard</span></a>
+    <a class="nav-link" data-view="expenses" title="Expenses"><i class="bi bi-receipt-cutoff me-2"></i><span class="nav-label">Expenses</span></a>
+    <a class="nav-link" data-view="vehicles" title="Vehicles"><i class="bi bi-car-front-fill me-2"></i><span class="nav-label">Vehicles</span></a>
+    <a class="nav-link" data-view="walking" title="Walking Profile"><i class="bi bi-person-walking me-2"></i><span class="nav-label">Walking Profile</span></a>
+    <a class="nav-link" data-view="trip" title="GPS Trip"><i class="bi bi-geo-alt-fill me-2"></i><span class="nav-label">GPS Trip</span></a>
+    <a class="nav-link" data-view="trips" title="Trip History"><i class="bi bi-clock-history me-2"></i><span class="nav-label">Trip History</span></a>
+    <a class="nav-link" data-view="reports" title="Reports"><i class="bi bi-bar-chart-fill me-2"></i><span class="nav-label">Reports</span></a>
+    <a class="nav-link" data-view="settings" title="Settings"><i class="bi bi-gear-fill me-2"></i><span class="nav-label">Settings</span></a>
   </nav>
   <nav id="navAdmin" class="nav flex-column d-none">
-    <div class="small text-uppercase text-secondary mt-3 mb-2">Master Admin</div>
-    <a class="nav-link" data-view="admin"><i class="bi bi-shield-lock me-2"></i>Admin Console</a>
+    <div class="small text-uppercase text-secondary mt-3 mb-2 workspace-label">Master Admin</div>
+    <a class="nav-link" data-view="admin" title="Admin Console"><i class="bi bi-shield-lock-fill me-2"></i><span class="nav-label">Admin Console</span></a>
   </nav>
-  </div>
-  <div class="mt-5 pt-5"><button id="logoutBtn" class="btn btn-outline-light w-100"><i class="bi bi-box-arrow-left"></i> Logout</button></div>
+  <div class="mt-5 pt-5"><button id="logoutBtn" class="btn btn-outline-light w-100" title="Logout"><i class="bi bi-box-arrow-left"></i> <span class="nav-label btn-label">Logout</span></button></div>
 </aside>
+<div id="sidebarBackdrop" class="sidebar-backdrop d-lg-none"></div>
 
 <main class="col-lg-10 p-3 p-md-4">
-<header class="d-flex justify-content-between align-items-center mb-4">
-  <div><h3 id="pageTitle" class="mb-1">Dashboard</h3><div class="muted small" id="welcome"></div></div>
-  <div class="d-flex gap-2 align-items-center"><span class="badge text-bg-success">Demo Mode</span><button class="btn btn-light" onclick="showView('settings')"><i class="bi bi-person-circle"></i></button></div>
+<header class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div class="d-flex align-items-center gap-2">
+    <button id="sidebarToggle" class="btn btn-light" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="sidebar" title="Toggle menu"><i class="bi bi-list fs-5"></i></button>
+    <div><h3 id="pageTitle" class="mb-1">Dashboard</h3><div class="muted small" id="welcome"></div></div>
+  </div>
+  <div class="d-flex gap-2 align-items-center"><span class="badge text-bg-success">Demo Mode</span><button class="btn btn-light" onclick="showView('settings')" title="Settings / Profile"><i class="bi bi-person-circle"></i></button></div>
 </header>
 
 <section id="dashboard" class="view active">
  <div class="row g-3">
   <div class="col-md-3"><div class="card p-3"><div class="muted">This Month Expense</div><div id="mExpense" class="metric">₹0</div><small class="text-success">All categories</small></div></div>
   <div class="col-md-3"><div class="card p-3"><div class="muted">Distance</div><div id="mDistance" class="metric">0 km</div><small>Tracked trips</small></div></div>
-  <div class="col-md-3" id="fuelMetricCard"><div class="card p-3"><div class="muted">Fuel Cost</div><div id="mFuel" class="metric">₹0</div><small>Estimated from mileage</small></div></div>
-  <div class="col-md-3 d-none" id="walkMetricCard"><div class="card p-3"><div class="muted">Calories Burned</div><div id="mCalories" class="metric">0 kcal</div><small>Walking estimate</small></div></div>
-  <div class="col-md-3"><div class="card p-3"><div class="muted" id="mActivityLabel">Active Vehicle</div><div id="mVehicle" class="metric">—</div><small id="mVehicleSub">Selected vehicle</small><div id="mSteps" class="small d-none">0 steps</div></div></div>
+  <div class="col-md-3"><div class="card p-3"><div class="muted">Fuel Cost</div><div id="mFuel" class="metric">₹0</div><small>Estimated from mileage</small></div></div>
+  <div class="col-md-3"><div class="card p-3"><div class="muted">Active Vehicle</div><div id="mVehicle" class="metric">—</div><small>Selected vehicle</small></div></div>
  </div>
  <div class="row g-3 mt-1">
-  <div class="col-lg-7"><div class="card p-4"><div class="d-flex justify-content-between"><h5>Recent Expenses</h5><button class="btn btn-sm btn-primary" onclick="showView('expenses')">Add expense</button></div><div class="table-responsive mt-3"><table class="table align-middle"><thead><tr><th>Date</th><th>Category</th><th>Note</th><th class="text-end">Amount</th></tr></thead><tbody id="recentExpenses"></tbody></table></div></div></div>
-  <div class="col-lg-5"><div class="card p-4"><h5>Quick Start</h5><div class="d-grid gap-2 mt-3"><button class="btn btn-outline-primary text-start" onclick="showView('trip')"><i class="bi bi-play-circle me-2"></i>Start GPS trip</button><button class="btn btn-outline-primary text-start" onclick="showView('expenses')"><i class="bi bi-plus-circle me-2"></i>Record expense</button><button class="btn btn-outline-primary text-start" onclick="showView('vehicles')"><i class="bi bi-car-front me-2"></i>Add vehicle</button></div><hr><small class="muted">GPS uses your browser/device location permission. Keep this page active during a trip for the most reliable demo tracking.</small></div></div>
+  <div class="col-lg-7"><div class="card p-4"><div class="d-flex justify-content-between"><h5><i class="bi bi-receipt-cutoff me-2"></i>Recent Expenses</h5><button class="btn btn-sm btn-primary" onclick="showView('expenses')">Add expense</button></div><div class="table-responsive mt-3"><table class="table align-middle"><thead><tr><th>Date</th><th>Category</th><th>Note</th><th class="text-end">Amount</th></tr></thead><tbody id="recentExpenses"></tbody></table></div></div></div>
+  <div class="col-lg-5"><div class="card p-4"><h5><i class="bi bi-lightning-charge-fill me-2"></i>Quick Start</h5><div class="d-grid gap-2 mt-3"><button class="btn btn-outline-primary text-start" onclick="showView('trip')"><i class="bi bi-play-circle me-2"></i>Start GPS trip</button><button class="btn btn-outline-primary text-start" onclick="showView('expenses')"><i class="bi bi-plus-circle me-2"></i>Record expense</button><button class="btn btn-outline-primary text-start" onclick="showView('vehicles')"><i class="bi bi-car-front me-2"></i>Add vehicle</button></div><hr><small class="muted">GPS uses your browser/device location permission. Keep this page active during a trip for the most reliable demo tracking.</small></div></div>
  </div>
 </section>
 
 <section id="expenses" class="view">
 <div class="card p-4">
- <div class="d-flex justify-content-between align-items-center mb-3"><h5>Daily Expense Tracker</h5><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#expenseModal"><i class="bi bi-plus"></i> Add Expense</button></div>
+ <div class="d-flex justify-content-between align-items-center mb-3"><h5 class="mb-0"><i class="bi bi-receipt-cutoff me-2"></i>Daily Expense Tracker</h5><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#expenseModal"><i class="bi bi-plus"></i> Add Expense</button></div>
  <div class="row g-2 mb-3"><div class="col-md-3"><input id="expenseSearch" class="form-control" placeholder="Search"></div><div class="col-md-3"><select id="expenseFilter" class="form-select"><option value="">All categories</option><option>Fuel</option><option>Food</option><option>Repair</option><option>Toll</option><option>Parking</option><option>Other</option></select></div></div>
  <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Date</th><th>Category</th><th>Vehicle</th><th>Note</th><th>Payment</th><th class="text-end">Amount</th><th></th></tr></thead><tbody id="expenseRows"></tbody></table></div>
 </div></section>
 
 <section id="vehicles" class="view">
-<div class="card p-4"><div class="d-flex justify-content-between align-items-center mb-3"><h5>Vehicle Master</h5><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#vehicleModal"><i class="bi bi-plus"></i> Add Vehicle</button></div>
+<div class="card p-4"><div class="d-flex justify-content-between align-items-center mb-3"><h5 class="mb-0"><i class="bi bi-car-front-fill me-2"></i>Vehicle Master</h5><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#vehicleModal"><i class="bi bi-plus"></i> Add Vehicle</button></div>
 <div class="alert alert-light border"><i class="bi bi-calculator me-2"></i> Fuel cost formula: <b>Distance ÷ Mileage × Fuel Rate</b>. Set the actual local fuel rate and vehicle efficiency below.</div>
 <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Vehicle</th><th>Type</th><th>Fuel</th><th>Mileage</th><th>Rate</th><th>Status</th><th></th></tr></thead><tbody id="vehicleRows"></tbody></table></div></div></section>
 
+<section id="walking" class="view">
+<div class="row g-3">
+<div class="col-lg-5">
+<div class="card p-4">
+ <div class="d-flex justify-content-between align-items-center mb-3"><h5 class="mb-0"><i class="bi bi-person-walking me-2"></i>Walking Profiles</h5><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#walkerModal"><i class="bi bi-plus"></i> Add Profile</button></div>
+ <div class="alert alert-light border small"><i class="bi bi-calculator me-2"></i> Steps are estimated from GPS distance and an age-based stride length; calories use your weight and walking pace (MET method). These are estimates, not medical-grade measurements.</div>
+ <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Name</th><th>Age</th><th>Weight</th><th>Status</th><th></th></tr></thead><tbody id="walkerRows"></tbody></table></div>
+</div>
+</div>
+<div class="col-lg-7">
+<div class="card p-4">
+ <div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><h5 class="mb-0"><i class="bi bi-person-walking me-1"></i> Live Walk Tracker</h5><span id="walkGpsStatus"><span class="gps-dot"></span> GPS idle</span></div>
+ <div class="row g-2 mt-2">
+  <div class="col-md-8"><label class="form-label">Walking profile</label><select id="tripWalker" class="form-select"></select></div>
+  <div class="col-md-4"><label class="form-label">Note</label><input id="walkPurpose" class="form-control" placeholder="Morning walk"></div>
+ </div>
+ <div id="walkPausedBanner" class="paused-banner mt-2 d-none"><i class="bi bi-pause-circle"></i> Auto-paused — no movement detected. Tracking will resume automatically as soon as you start moving again.</div>
+ <div id="walkPermissionBox" class="alert alert-primary mt-3">
+   <div class="d-flex gap-2">
+     <i class="bi bi-shield-check fs-3"></i>
+     <div>
+       <b>Location Tracking Permission</b>
+       <div class="small mt-1">Used only to calculate walking distance, steps and calories for this walk.</div>
+       <div class="mt-2"><span class="badge text-bg-secondary" id="walkPermissionState">Not Requested</span></div>
+     </div>
+   </div>
+   <div class="d-flex flex-wrap gap-2 mt-3">
+     <button id="walkPermissionBtn" class="btn btn-primary btn-sm"><i class="bi bi-geo-alt-fill"></i> Ask Browser for Location Access</button>
+   </div>
+ </div>
+ <div id="walkMap" class="mt-3"></div>
+ <div id="walkGpsInfo" class="small muted mt-2">Location permission has not been requested.</div>
+ <div class="row text-center mt-3">
+  <div class="col-4"><div class="metric" id="walkKm">0.00</div><small class="muted">KM</small></div>
+  <div class="col-4"><div class="metric" id="walkTime">00:00</div><small class="muted">Moving Time</small></div>
+  <div class="col-4"><div class="metric" id="walkSpeed">0.0</div><small class="muted">Speed km/h</small></div>
+ </div>
+ <div class="row text-center mt-2">
+  <div class="col-6"><div class="metric" id="walkSteps">0</div><small class="muted">Steps</small></div>
+  <div class="col-6"><div class="metric" id="walkCalories">0</div><small class="muted">Calories (kcal)</small></div>
+ </div>
+ <div class="d-flex gap-2 mt-4"><button id="startWalk" class="btn btn-success flex-fill" disabled><i class="bi bi-play-fill"></i> Start Walk</button><button id="stopWalk" class="btn btn-danger flex-fill" disabled><i class="bi bi-stop-fill"></i> Stop & Save</button></div>
+</div>
+</div>
+</div>
+
+<div class="card p-4 mt-3">
+ <h5><i class="bi bi-clock-history me-2"></i>Walk History</h5>
+ <div class="table-responsive mt-3"><table class="table align-middle"><thead><tr><th>Date</th><th>Walker</th><th>Note</th><th>Distance</th><th>Duration</th><th>Steps</th><th>Calories</th></tr></thead><tbody id="walkRows"></tbody></table></div>
+</div>
+</section>
+
 <section id="trip" class="view">
 <div class="row g-3"><div class="col-lg-7"><div class="card p-4">
-<div class="d-flex justify-content-between"><h5>Live GPS Trip</h5><span id="gpsStatus"><span class="gps-dot"></span> GPS idle</span></div>
-<div class="row g-2 mt-2"><div class="col-md-6"><label class="form-label">Vehicle</label><select id="tripVehicle" class="form-select"></select></div><div class="col-md-6"><label class="form-label">Purpose</label><input id="tripPurpose" class="form-control" placeholder="Delivery / personal / field work"></div></div>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><h5 class="mb-0">Live GPS Trip</h5><span id="gpsStatus"><span class="gps-dot"></span> GPS idle</span></div>
+<div class="row g-2 mt-2">
+ <div class="col-md-6"><label class="form-label">Vehicle</label><select id="tripVehicle" class="form-select"></select></div>
+ <div class="col-md-6"><label class="form-label">Purpose</label><input id="tripPurpose" class="form-control" placeholder="Delivery / personal / field work"></div>
+</div>
+<div id="pausedBanner" class="paused-banner mt-2 d-none"><i class="bi bi-pause-circle"></i> Auto-paused — no movement detected. Tracking will resume automatically as soon as you start moving again.</div>
 <div id="permissionBox" class="alert alert-primary mt-3">
   <div class="d-flex gap-2">
     <i class="bi bi-shield-check fs-3"></i>
@@ -143,22 +224,45 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
     </div>
   </div>
 </div>
-<div class="mt-3"><div id="liveMap" style="height:320px;border-radius:16px;overflow:hidden;background:#e9eef5"></div><div class="d-flex justify-content-between align-items-center mt-2"><small class="muted"><i class="bi bi-broadcast-pin me-1"></i>Live route map updates while tracking</small><button id="centerMapBtn" class="btn btn-sm btn-outline-primary" type="button"><i class="bi bi-crosshair me-1"></i>Center</button></div><div class="small mt-2" id="gpsInfo">Location permission has not been requested.</div><div class="alert alert-light border mt-2 mb-0"><b>Live GPS Speed:</b> <span id="gpsSpeed">0.0 km/h</span> <span class="ms-2" id="movementMode">Walking / stationary</span></div></div>
-<div class="row text-center mt-3"><div class="col-3"><div class="metric" id="tripKm">0.00</div><small class="muted">KM</small></div><div class="col-3" id="fuelTripMetric"><div class="metric" id="tripFuel">0.00</div><small class="muted">Fuel L</small></div><div class="col-3" id="costTripMetric"><div class="metric" id="tripCost">₹0</div><small class="muted">Fuel Cost</small></div><div class="col-3"><div class="metric" id="tripSteps">0</div><small class="muted">Steps</small><div class="small" id="tripCalories">0 kcal</div></div></div>
+<div id="tripMap" class="mt-3"></div>
+<div id="gpsInfo" class="small muted mt-2">Location permission has not been requested.</div>
+
+<div class="row text-center mt-3">
+ <div class="col-4"><div class="metric" id="tripKm">0.00</div><small class="muted">Total KM</small></div>
+ <div class="col-4"><div class="metric" id="tripTime">00:00</div><small class="muted">Moving Time</small></div>
+ <div class="col-4"><div class="metric" id="tripSpeed">0.0</div><small class="muted">Speed km/h</small></div>
+</div>
+<div class="row text-center mt-2">
+ <div class="col-4"><div class="metric" id="tripFuel">0.00</div><small class="muted">Est. Fuel L</small></div>
+ <div class="col-4"><div class="metric" id="tripCost">₹0</div><small class="muted">Est. Fuel Cost</small></div>
+ <div class="col-4"><div class="metric" id="tripFuelAdded">₹0</div><small class="muted">Fuel Purchased</small></div>
+</div>
+
+<div id="fuelAddBox" class="border rounded p-3 mt-3 d-none">
+ <div class="d-flex justify-content-between align-items-center"><b class="small"><i class="bi bi-fuel-pump"></i> Add fuel to this trip</b></div>
+ <div class="row g-2 mt-1">
+  <div class="col-5"><input id="fuelLiters" type="number" min="0" step="0.01" class="form-control form-control-sm" placeholder="Litres/kWh"></div>
+  <div class="col-5"><input id="fuelCost" type="number" min="0" step="0.01" class="form-control form-control-sm" placeholder="Amount ₹"></div>
+  <div class="col-2"><button class="btn btn-sm btn-primary w-100" id="addFuelBtn"><i class="bi bi-plus"></i></button></div>
+ </div>
+ <div id="fuelLogList" class="mt-2"></div>
+</div>
+
 <div class="d-flex gap-2 mt-4"><button id="startTrip" class="btn btn-success flex-fill" disabled><i class="bi bi-play-fill"></i> Start Trip</button><button id="stopTrip" class="btn btn-danger flex-fill" disabled><i class="bi bi-stop-fill"></i> Stop & Save</button></div>
 </div></div>
-<div class="col-lg-5"><div class="card p-4"><h5>How it works</h5><ol class="small mt-3"><li>Choose your vehicle.</li><li>Allow browser location permission.</li><li>Start the trip.</li><li>The app accumulates GPS distance using successive coordinates.</li><li>Stop to save trip and calculate estimated fuel/cost.</li></ol><div class="alert alert-warning small">Browser GPS accuracy varies. For production use, HTTPS is required by most browsers for location access.</div></div></div></div>
+<div class="col-lg-5"><div class="card p-4"><h5><i class="bi bi-info-circle me-2"></i>How it works</h5><ol class="small mt-3"><li>Choose your vehicle.</li><li>Allow browser location permission once.</li><li>Press Start Trip — the app accumulates GPS distance automatically.</li><li>If you stop moving, tracking auto-pauses; it resumes by itself the moment you move again.</li><li>You can log fuel top-ups mid-trip and the totals update instantly.</li><li>Stop to save the trip with its distance and fuel cost breakdown.</li></ol>
+<div class="alert alert-warning small mb-2">Browser GPS accuracy varies from device to device.</div>
+<div class="alert alert-info small mb-0"><i class="bi bi-info-circle"></i> <b>Keeping the trip running in the background:</b> this app requests a screen wake-lock and keeps listening for GPS updates while the tab is open, even if minimized briefly. However, phone browsers (especially Chrome/Safari on mobile) can pause JavaScript entirely once the screen locks or the browser is fully closed — that's an OS-level restriction no website can override. For uninterrupted long trips, keep the screen on and the tab open, or add this page to your home screen and keep it in the foreground.</div>
+</div></div></div>
 </section>
 
-<section id="trips" class="view"><div class="card p-4"><h5>Trip History</h5><div class="table-responsive mt-3"><table class="table align-middle"><thead><tr><th>Date</th><th>Vehicle</th><th>Purpose</th><th>Distance</th><th>Fuel</th><th>Fuel Cost</th></tr></thead><tbody id="tripRows"></tbody></table></div></div></section>
+<section id="trips" class="view"><div class="card p-4"><h5><i class="bi bi-clock-history me-2"></i>Trip History</h5><div class="table-responsive mt-3"><table class="table align-middle"><thead><tr><th>Date</th><th>Vehicle</th><th>Purpose</th><th>Distance</th><th>Est. Fuel</th><th>Est. Fuel Cost</th><th>Fuel Purchased</th></tr></thead><tbody id="tripRows"></tbody></table></div></div></section>
 
-<section id="reports" class="view"><div class="row g-3"><div class="col-md-6"><div class="card p-4"><h5>Expense Summary</h5><div id="reportExpense"></div></div></div><div class="col-md-6"><div class="card p-4"><h5>Vehicle Running Summary</h5><div id="reportVehicle"></div></div></div></div></section>
+<section id="reports" class="view"><div class="row g-3"><div class="col-md-6"><div class="card p-4"><h5><i class="bi bi-cash-stack me-2"></i>Expense Summary</h5><div id="reportExpense"></div></div></div><div class="col-md-6"><div class="card p-4"><h5><i class="bi bi-car-front-fill me-2"></i>Vehicle Running Summary</h5><div id="reportVehicle"></div></div></div></div></section>
 
-<section id="settings" class="view"><div class="card p-4"><h5>Settings</h5><div class="row g-3 mt-1"><div class="col-md-6"><label class="form-label">Default petrol rate (₹/L)</label><input id="defaultRate" type="number" class="form-control"></div><div class="col-md-6"><label class="form-label">Currency</label><input class="form-control" value="INR (₹)" disabled></div><div class="col-12"><button class="btn btn-primary" onclick="saveSettings()">Save Settings</button></div></div><hr><h6>Google Sheets Production Mode</h6><p class="small muted">Paste your deployed Google Apps Script Web App URL in the backend configuration when moving from Demo Mode.</p></div></section>
+<section id="settings" class="view"><div class="card p-4"><h5><i class="bi bi-gear-fill me-2"></i>Settings</h5><div class="row g-3 mt-1"><div class="col-md-6"><label class="form-label">Default petrol rate (₹/L)</label><input id="defaultRate" type="number" class="form-control"></div><div class="col-md-6"><label class="form-label">Currency</label><input class="form-control" value="INR (₹)" disabled></div><div class="col-12"><button class="btn btn-primary" onclick="saveSettings()">Save Settings</button></div></div><hr><h6>Google Sheets Production Mode</h6><p class="small muted">Paste your deployed Google Apps Script Web App URL in the backend configuration when moving from Demo Mode.</p></div></section>
 
-<section id="help" class="view"><div class="card p-4"><h5>Help & Guide</h5><p class="small">Use Dashboard for summaries, Expenses for costs, Vehicles for vehicle setup, GPS Trip for live tracking, Trip History for saved trips, Reports for summaries, and Settings for preferences.</p></div></section>
-
-<section id="admin" class="view"><div class="card p-4"><div class="d-flex justify-content-between"><div><h5>Master Admin Console</h5><div class="muted small">Subscriber authentication and plan control</div></div><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#userModal"><i class="bi bi-person-plus"></i> Create Subscriber</button></div>
+<section id="admin" class="view"><div class="card p-4"><div class="d-flex justify-content-between"><div><h5><i class="bi bi-shield-lock-fill me-2"></i>Master Admin Console</h5><div class="muted small">Subscriber authentication and plan control</div></div><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#userModal"><i class="bi bi-person-plus"></i> Create Subscriber</button></div>
 <div class="table-responsive mt-3"><table class="table align-middle"><thead><tr><th>Business</th><th>Username</th><th>Plan</th><th>Expiry</th><th>Status</th><th></th></tr></thead><tbody id="userRows"></tbody></table></div>
 </div></section>
 
@@ -169,11 +273,13 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 <div class="modal fade" id="expenseModal"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5>Add Expense</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="form-label">Date</label><input id="eDate" type="date" class="form-control mb-2"><label class="form-label">Category</label><select id="eCat" class="form-select mb-2"><option>Fuel</option><option>Food</option><option>Repair</option><option>Toll</option><option>Parking</option><option>Other</option></select><label class="form-label">Vehicle</label><select id="eVehicle" class="form-select mb-2"></select><label class="form-label">Amount</label><input id="eAmount" type="number" min="0" class="form-control mb-2"><label class="form-label">Payment</label><select id="ePayment" class="form-select mb-2"><option>Cash</option><option>UPI</option><option>Card</option><option>Bank</option></select><label class="form-label">Note</label><input id="eNote" class="form-control"></div><div class="modal-footer"><button class="btn btn-primary" onclick="addExpense()">Save</button></div></div></div></div>
 <!-- Vehicle Modal -->
 <div class="modal fade" id="vehicleModal"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5>Add Vehicle</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input id="vName" class="form-control mb-2" placeholder="Vehicle name/number"><select id="vType" class="form-select mb-2"><option>Two Wheeler</option><option>Three Wheeler</option><option>Car</option><option>Pickup</option><option>Truck</option><option>Bus</option><option>Other</option></select><select id="vFuel" class="form-select mb-2"><option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option></select><label class="form-label">Mileage / Efficiency</label><input id="vMileage" type="number" min="0.1" step="0.1" class="form-control mb-2" placeholder="km per litre (or km/kWh)"><label class="form-label">Fuel/Energy Rate ₹</label><input id="vRate" type="number" min="0" step="0.01" class="form-control"></div><div class="modal-footer"><button class="btn btn-primary" onclick="addVehicle()">Save Vehicle</button></div></div></div></div>
+<!-- Walker Modal -->
+<div class="modal fade" id="walkerModal"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5>Add Walking Profile</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="form-label">Name</label><input id="wName" class="form-control mb-2" placeholder="Name"><label class="form-label">Age</label><input id="wAge" type="number" min="1" max="120" class="form-control mb-2" placeholder="Age (years)"><label class="form-label">Weight</label><input id="wWeight" type="number" min="1" step="0.1" class="form-control" placeholder="Weight (kg)"></div><div class="modal-footer"><button class="btn btn-primary" onclick="addWalker()">Save Profile</button></div></div></div></div>
 <!-- User Modal -->
 <div class="modal fade" id="userModal"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5>Create Subscriber</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input id="uBusiness" class="form-control mb-2" placeholder="Business name"><input id="uName" class="form-control mb-2" placeholder="Username"><input id="uPass" class="form-control mb-2" placeholder="Temporary password"><select id="uPlan" class="form-select mb-2"><option>Starter</option><option>Professional</option><option>Enterprise</option></select><select id="uStatus" class="form-select"><option>Active</option><option>Pending</option></select></div><div class="modal-footer"><button class="btn btn-primary" onclick="addUser()">Create</button></div></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const KEY='srd_driveledger_demo_v1';
 const DEMO_DEFAULTS={
@@ -182,11 +288,15 @@ const DEMO_DEFAULTS={
   {id:1,name:'MH-31 AB 1234',type:'Two Wheeler',fuel:'Petrol',mileage:45,rate:105,active:true},
   {id:2,name:'MH-31 XY 5678',type:'Three Wheeler',fuel:'CNG',mileage:28,rate:92,active:true}
  ],
+ walkers:[
+  {id:1,name:'Demo User',age:30,weight:70,active:true}
+ ],
  expenses:[
   {id:1,date:new Date().toISOString().slice(0,10),cat:'Fuel',vehicleId:1,note:'Demo fuel',payment:'UPI',amount:500},
   {id:2,date:new Date().toISOString().slice(0,10),cat:'Toll',vehicleId:1,note:'Highway toll',payment:'Cash',amount:120}
  ],
  trips:[],
+ walks:[],
  users:[{business:'Demo Krushi/Field Services',username:'demo',plan:'Professional',expiry:'2026-12-31',status:'Active'}]
 };
 function loadDemoState(){
@@ -202,54 +312,17 @@ function loadDemoState(){
  }
 }
 let state=loadDemoState();
-let currentUser=localStorage.getItem('SRD_DL_LOGIN_USER')||null, watchId=null, trip={running:false,points:[],km:0};
-let liveMap=null, liveMarker=null, liveAccuracy=null, liveRoute=null, lastMapPoint=null, lastSpeedKmh=0;
-function loadLeaflet(cb){
-  if(window.L){cb();return;}
-  if(window.__leafletLoading){window.__leafletCallbacks.push(cb);return;}
-  window.__leafletLoading=true; window.__leafletCallbacks=[cb];
-  const sc=document.createElement('script'); sc.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'; sc.async=true; sc.onload=()=>{window.__leafletLoading=false;(window.__leafletCallbacks||[]).splice(0).forEach(fn=>fn());}; sc.onerror=()=>{window.__leafletLoading=false;alert('Live map could not load. Please check your internet connection.');}; document.head.appendChild(sc);
-}
-function initLiveMap(){
-  if(!window.L || liveMap) return;
-  liveMap=L.map('liveMap',{zoomControl:true}).setView([20.5937,78.9629],5);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(liveMap);
-  liveRoute=L.polyline([],{weight:5}).addTo(liveMap);
-  document.getElementById('centerMapBtn').onclick=()=>{if(lastMapPoint)liveMap.setView([lastMapPoint.lat,lastMapPoint.lon],16);};
-}
-function markerIcon(v, speed){
-  const walking = Number(speed||0) <= 10;
-  const glyph = walking ? '🚶' : (v?.type==='Two Wheeler' ? '🏍️' : v?.type==='Three Wheeler' ? '🛺' : v?.type==='Truck' ? '🚚' : v?.type==='Bus' ? '🚌' : v?.type==='Pickup' ? '🛻' : '🚗');
-  return L.divIcon({className:'gps-user-marker',html:`<div style="font-size:30px;text-align:center;text-shadow:0 1px 3px #fff">${glyph}</div>`,iconSize:[36,36],iconAnchor:[18,18]});
-}
-function updateLiveMap(p){
-  if(!window.L){ loadLeaflet(()=>updateLiveMap(p)); return; }
-  initLiveMap(); if(!liveMap) return;
-  const ll=[p.lat,p.lon]; lastMapPoint=p;
-  const v=vehicle(document.getElementById('tripVehicle').value);
-  if(!liveMarker) liveMarker=L.marker(ll,{icon:markerIcon(v,p.speedKmh)}).addTo(liveMap).bindPopup('Current GPS position'); else liveMarker.setLatLng(ll).setIcon(markerIcon(v,p.speedKmh));
-  if(!liveAccuracy) liveAccuracy=L.circle(ll,{radius:p.acc||0,weight:1,fillOpacity:.08}).addTo(liveMap); else liveAccuracy.setLatLng(ll).setRadius(p.acc||0);
-  const pts=trip.points.map(x=>[x.lat,x.lon]); liveRoute.setLatLngs(pts);
-  if(trip.points.length===1) liveMap.setView(ll,16); else liveMap.panTo(ll,{animate:true,duration:.5});
-}
-function resetLiveMap(){
-  if(liveRoute)liveRoute.setLatLngs([]); if(liveMarker){liveMap.removeLayer(liveMarker);liveMarker=null;} if(liveAccuracy){liveMap.removeLayer(liveAccuracy);liveAccuracy=null;} lastMapPoint=null;
-}
+let currentUser=null, watchId=null, trip={running:false,paused:false,points:[],km:0,movingMs:0,lastMoveAt:Date.now(),fuelLog:[]};
 
 function persist(){localStorage.setItem(KEY,JSON.stringify(state))}
 function money(n){return '₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}
 function vehicle(id){return state.vehicles.find(v=>String(v.id)===String(id))}
 function hav(a,b){const R=6371, p=Math.PI/180, dLat=(b.lat-a.lat)*p,dLon=(b.lon-a.lon)*p;const x=Math.sin(dLat/2)**2+Math.cos(a.lat*p)*Math.cos(b.lat*p)*Math.sin(dLon/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))}
-let loginBusy=false;
 function login(){
- if(loginBusy) return;
  const u=(document.getElementById('loginUser').value||'').trim().toLowerCase();
  const p=document.getElementById('loginPass').value||'';
  if((u==='demo'&&p==='demo123')||(u==='admin'&&p==='admin123')){
-  loginBusy=true;
-  const btn=document.getElementById('loginBtn'); if(btn){btn.disabled=true;btn.innerHTML='Opening…';}
   currentUser=u;
-  localStorage.setItem('SRD_DL_LOGIN_USER',u);
   const loginScreen=document.getElementById('loginScreen');
   const app=document.getElementById('app');
   if(loginScreen) loginScreen.classList.add('d-none');
@@ -258,50 +331,75 @@ function login(){
   if(navAdmin) navAdmin.classList.toggle('d-none',u!=='admin');
   const welcome=document.getElementById('welcome');
   if(welcome) welcome.textContent=u==='admin'?'Master Administrator':'Welcome, Demo Subscriber';
-  requestAnimationFrame(()=>{ try{ renderAll(); }catch(e){ console.error(e); } });
+  try{ renderAll(); }catch(e){ console.error(e); alert('Login successful, but the dashboard could not finish loading. Please refresh once.'); }
  } else {
   alert('Invalid demo credentials.\nSubscriber: demo / demo123\nAdmin: admin / admin123');
  }
 }
 document.getElementById('loginBtn').onclick=login;
 document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
-function restoreLogin(){
- const u=localStorage.getItem('SRD_DL_LOGIN_USER');
- if(u==='demo'||u==='admin'){
-  currentUser=u;
-  document.getElementById('loginScreen')?.classList.add('d-none');
-  document.getElementById('app')?.classList.remove('d-none');
-  document.getElementById('navAdmin')?.classList.toggle('d-none',u!=='admin');
-  const welcome=document.getElementById('welcome');
-  if(welcome) welcome.textContent=u==='admin'?'Master Administrator':'Welcome, Demo Subscriber';
-  requestAnimationFrame(()=>{try{renderAll();}catch(e){console.error(e);}});
- }
-}
-restoreLogin();
 document.getElementById('resetDemoBtn').onclick=()=>{
  if(confirm('Reset demo data and restore the default demo account?')){
    localStorage.removeItem(KEY);
    location.reload();
  }
 };
-document.getElementById('logoutBtn').onclick=()=>{
- localStorage.removeItem('SRD_DL_LOGIN_USER');
- currentUser=null;
- if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null;}
- location.reload();
-};
+document.getElementById('logoutBtn').onclick=()=>location.reload();
+/* ---------- Sidebar navigation toggle (mobile off-canvas + desktop collapse-to-rail) ---------- */
+const sidebarEl=document.getElementById('sidebar');
+const sidebarBackdrop=document.getElementById('sidebarBackdrop');
+const sidebarToggleBtn=document.getElementById('sidebarToggle');
+const sidebarCloseBtn=document.getElementById('sidebarClose');
+function isDesktopNav(){return window.matchMedia('(min-width:992px)').matches}
+function setToggleIcon(name){sidebarToggleBtn.innerHTML=`<i class="bi bi-${name} fs-5"></i>`}
+function syncToggleUIForState(){
+ if(isDesktopNav()){
+   const collapsed=document.body.classList.contains('sidebar-collapsed');
+   setToggleIcon(collapsed?'chevron-double-right':'chevron-double-left');
+   sidebarToggleBtn.setAttribute('aria-expanded',String(!collapsed));
+   sidebarToggleBtn.setAttribute('title',collapsed?'Expand menu':'Collapse menu');
+ } else {
+   const open=sidebarEl.classList.contains('show');
+   setToggleIcon(open?'x-lg':'list');
+   sidebarToggleBtn.setAttribute('aria-expanded',String(open));
+   sidebarToggleBtn.setAttribute('title',open?'Close menu':'Open menu');
+ }
+}
+function openMobileSidebar(){sidebarEl.classList.add('show');sidebarBackdrop.classList.add('show');document.body.classList.add('sidebar-open');syncToggleUIForState()}
+function closeMobileSidebar(){sidebarEl.classList.remove('show');sidebarBackdrop.classList.remove('show');document.body.classList.remove('sidebar-open');syncToggleUIForState()}
+function toggleSidebar(){
+ if(isDesktopNav()){
+   const collapsed=document.body.classList.toggle('sidebar-collapsed');
+   try{localStorage.setItem('srd_sidebar_collapsed',collapsed?'1':'0')}catch(e){}
+ } else {
+   sidebarEl.classList.contains('show')?closeMobileSidebar():openMobileSidebar();
+   return;
+ }
+ syncToggleUIForState();
+}
+sidebarToggleBtn.onclick=toggleSidebar;
+sidebarCloseBtn.onclick=closeMobileSidebar;
+sidebarBackdrop.onclick=closeMobileSidebar;
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMobileSidebar()});
+window.addEventListener('resize',()=>{if(isDesktopNav())closeMobileSidebar();syncToggleUIForState()});
+try{if(localStorage.getItem('srd_sidebar_collapsed')==='1')document.body.classList.add('sidebar-collapsed')}catch(e){}
+syncToggleUIForState();
+
 document.querySelectorAll('[data-view]').forEach(x=>x.onclick=()=>showView(x.dataset.view));
+document.querySelectorAll('[data-view]').forEach(x=>x.addEventListener('click',()=>{if(!isDesktopNav())closeMobileSidebar()}));
 function showView(id){
  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');
  document.querySelectorAll('[data-view]').forEach(v=>v.classList.toggle('active',v.dataset.view===id));
- const titles={dashboard:'Dashboard',expenses:'Daily Expenses',vehicles:'Vehicle Master',trip:'GPS Trip',trips:'Trip History',reports:'Reports',settings:'Settings',help:'Help & Guide',admin:'Master Admin Console'};
+ const titles={dashboard:'Dashboard',expenses:'Daily Expenses',vehicles:'Vehicle Master',walking:'Walking Profile',trip:'GPS Trip',trips:'Trip History',reports:'Reports',settings:'Settings',admin:'Master Admin Console'};
  document.getElementById('pageTitle').textContent=titles[id]||id;
  if(id==='reports')renderReports();
+ if(id==='trip'){initTripMap();setTimeout(()=>{if(tripMap)tripMap.invalidateSize()},150);}
+ if(id==='walking'){initWalkMap();setTimeout(()=>{if(walkMap)walkMap.invalidateSize()},150);}
 }
-function renderAll(){renderDashboard();renderExpenses();renderVehicles();renderSelects();renderTrips();renderUsers();document.getElementById('defaultRate').value=state.settings.rate}
+function renderAll(){renderDashboard();renderExpenses();renderVehicles();renderWalkers();renderSelects();renderTrips();renderWalkHistory();renderUsers();document.getElementById('defaultRate').value=state.settings.rate}
 function renderDashboard(){
  const total=state.expenses.reduce((s,e)=>s+Number(e.amount),0), dist=state.trips.reduce((s,t)=>s+t.km,0), fuel=state.trips.reduce((s,t)=>s+t.fuel,0), cost=state.trips.reduce((s,t)=>s+t.cost,0);
- document.getElementById('mExpense').textContent=money(total);document.getElementById('mDistance').textContent=dist.toFixed(1)+' km';document.getElementById('mFuel').textContent=money(cost);document.getElementById('mVehicle').textContent=state.vehicles.find(v=>v.active)?.name||'—'; updateWalkingUI(lastSpeedKmh,0,0);
+ document.getElementById('mExpense').textContent=money(total);document.getElementById('mDistance').textContent=dist.toFixed(1)+' km';document.getElementById('mFuel').textContent=money(cost);document.getElementById('mVehicle').textContent=(state.vehicles.find(v=>v.active)||state.vehicles[0])?.name||'—';
  document.getElementById('recentExpenses').innerHTML=state.expenses.slice(-6).reverse().map(e=>`<tr><td>${e.date}</td><td>${e.cat}</td><td>${e.note||''}</td><td class="text-end">${money(e.amount)}</td></tr>`).join('')||'<tr><td colspan=4 class="text-center muted">No expenses</td></tr>';
 }
 function renderExpenses(){
@@ -309,11 +407,18 @@ function renderExpenses(){
  document.getElementById('expenseRows').innerHTML=state.expenses.filter(e=>(!q||(e.note||'').toLowerCase().includes(q)||e.cat.toLowerCase().includes(q))&&(!f||e.cat===f)).slice().reverse().map(e=>`<tr><td>${e.date}</td><td>${e.cat}</td><td>${vehicle(e.vehicleId)?.name||'-'}</td><td>${e.note||''}</td><td>${e.payment}</td><td class="text-end">${money(e.amount)}</td><td><button class="btn btn-sm btn-outline-danger" onclick="delExpense(${e.id})"><i class="bi bi-trash"></i></button></td></tr>`).join('')||'<tr><td colspan=7 class="text-center muted">No matching expenses</td></tr>';
 }
 document.getElementById('expenseSearch').oninput=renderExpenses;document.getElementById('expenseFilter').onchange=renderExpenses;
-function renderVehicles(){document.getElementById('vehicleRows').innerHTML=state.vehicles.map(v=>`<tr><td><b>${v.name}</b></td><td>${v.type}</td><td>${v.fuel}</td><td>${v.mileage}</td><td>${money(v.rate)}</td><td><span class="badge ${v.active?'text-bg-success':'text-bg-secondary'}">${v.active?'Active':'Inactive'}</span></td><td><button class="btn btn-sm btn-outline-danger" onclick="delVehicle(${v.id})">Delete</button></td></tr>`).join('')}
-function renderSelects(){const opts=state.vehicles.map(v=>`<option value="${v.id}">${v.name} — ${v.type}</option>`).join('');document.getElementById('tripVehicle').innerHTML=opts;document.getElementById('eVehicle').innerHTML='<option value="">General</option>'+opts}
-function addVehicle(){const v={id:Date.now(),name:document.getElementById('vName').value.trim(),type:document.getElementById('vType').value,fuel:document.getElementById('vFuel').value,mileage:Number(document.getElementById('vMileage').value),rate:Number(document.getElementById('vRate').value)||state.settings.rate,active:true};if(!v.name||!v.mileage)return alert('Enter vehicle name and mileage.');state.vehicles.push(v);persist();bootstrap.Modal.getInstance(document.getElementById('vehicleModal')).hide();renderAll()}
-function delVehicle(id){if(confirm('Delete vehicle?')){state.vehicles=state.vehicles.filter(v=>v.id!==id);persist();renderAll()}}
-function addExpense(){const e={id:Date.now(),date:document.getElementById('eDate').value||new Date().toISOString().slice(0,10),cat:document.getElementById('eCat').value,vehicleId:document.getElementById('eVehicle').value,note:document.getElementById('eNote').value,payment:document.getElementById('ePayment').value,amount:Number(document.getElementById('eAmount').value)};if(!e.amount)return alert('Enter amount.');state.expenses.push(e);persist();bootstrap.Modal.getInstance(document.getElementById('expenseModal')).hide();renderAll()}
+function renderVehicles(){document.getElementById('vehicleRows').innerHTML=state.vehicles.map(v=>`<tr><td><b>${v.name}</b></td><td>${v.type}</td><td>${v.fuel}</td><td>${v.mileage}</td><td>${money(v.rate)}</td><td><span class="badge ${v.active?'text-bg-success':'text-bg-secondary'}">${v.active?'Active':'Inactive'}</span></td><td><button class="btn btn-sm btn-outline-secondary me-1" onclick="setActiveVehicle(${v.id})">Set Active</button><button class="btn btn-sm btn-outline-danger" onclick="delVehicle(${v.id})">Delete</button></td></tr>`).join('')||'<tr><td colspan=7 class="text-center muted">No vehicles yet — add one to start tracking fuel cost and trips.</td></tr>'}
+function setActiveVehicle(id){state.vehicles.forEach(v=>v.active=(v.id===id));persist();renderAll()}
+function renderWalkers(){document.getElementById('walkerRows').innerHTML=(state.walkers||[]).map(w=>`<tr><td><b>${w.name}</b></td><td>${w.age}</td><td>${w.weight} kg</td><td><span class="badge ${w.active?'text-bg-success':'text-bg-secondary'}">${w.active?'Active':'Inactive'}</span></td><td><button class="btn btn-sm btn-outline-secondary me-1" onclick="setActiveWalker(${w.id})">Set Active</button><button class="btn btn-sm btn-outline-danger" onclick="delWalker(${w.id})">Delete</button></td></tr>`).join('')||'<tr><td colspan=5 class="text-center muted">No walking profile yet — add your name, age and weight to enable step/calorie tracking.</td></tr>'}
+function renderSelects(){const opts=state.vehicles.map(v=>`<option value="${v.id}">${v.name} — ${v.type}</option>`).join('');document.getElementById('tripVehicle').innerHTML=opts;document.getElementById('eVehicle').innerHTML='<option value="">General</option>'+opts;const wopts=(state.walkers||[]).map(w=>`<option value="${w.id}">${w.name} — ${w.age}y, ${w.weight}kg</option>`).join('');document.getElementById('tripWalker').innerHTML=wopts||'<option value="">Add a walking profile first</option>';const active=activeWalker();if(active)document.getElementById('tripWalker').value=active.id}
+document.getElementById('tripWalker').onchange=function(){if(this.value)setActiveWalker(Number(this.value))};
+function addVehicle(){const v={id:Date.now(),name:document.getElementById('vName').value.trim(),type:document.getElementById('vType').value,fuel:document.getElementById('vFuel').value,mileage:Number(document.getElementById('vMileage').value),rate:Number(document.getElementById('vRate').value)||state.settings.rate,active:true};if(!v.name||!v.mileage)return alert('Enter vehicle name and mileage.');state.vehicles.forEach(x=>x.active=false);state.vehicles.push(v);persist();bootstrap.Modal.getInstance(document.getElementById('vehicleModal')).hide();document.getElementById('vName').value='';document.getElementById('vMileage').value='';document.getElementById('vRate').value='';renderAll()}
+function delVehicle(id){if(confirm('Delete vehicle?')){const wasActive=state.vehicles.find(v=>v.id===id)?.active;state.vehicles=state.vehicles.filter(v=>v.id!==id);if(wasActive&&state.vehicles.length)state.vehicles[0].active=true;persist();renderAll()}}
+function addWalker(){const w={id:Date.now(),name:document.getElementById('wName').value.trim(),age:Number(document.getElementById('wAge').value),weight:Number(document.getElementById('wWeight').value),active:true};if(!w.name||!w.age||!w.weight)return alert('Enter name, age and weight.');state.walkers=state.walkers||[];state.walkers.forEach(x=>x.active=false);state.walkers.push(w);persist();bootstrap.Modal.getInstance(document.getElementById('walkerModal')).hide();document.getElementById('wName').value='';document.getElementById('wAge').value='';document.getElementById('wWeight').value='';renderAll()}
+function delWalker(id){if(confirm('Delete this walking profile?')){const wasActive=state.walkers.find(w=>w.id===id)?.active;state.walkers=state.walkers.filter(w=>w.id!==id);if(wasActive&&state.walkers.length)state.walkers[0].active=true;persist();renderAll()}}
+function setActiveWalker(id){state.walkers.forEach(w=>w.active=(w.id===id));persist();renderAll()}
+function activeWalker(){return (state.walkers||[]).find(w=>w.active)||(state.walkers||[])[0]}
+function addExpense(){const e={id:Date.now(),date:document.getElementById('eDate').value||new Date().toISOString().slice(0,10),cat:document.getElementById('eCat').value,vehicleId:document.getElementById('eVehicle').value,note:document.getElementById('eNote').value,payment:document.getElementById('ePayment').value,amount:Number(document.getElementById('eAmount').value)};if(!e.amount)return alert('Enter amount.');state.expenses.push(e);persist();bootstrap.Modal.getInstance(document.getElementById('expenseModal')).hide();document.getElementById('eAmount').value='';document.getElementById('eNote').value='';document.getElementById('eDate').value=new Date().toISOString().slice(0,10);renderAll()}
 function delExpense(id){state.expenses=state.expenses.filter(e=>e.id!==id);persist();renderAll()}
 let gpsPermission='not-requested';
 let locationConsent=false;
@@ -321,13 +426,27 @@ let locationConsent=false;
 function setPermissionUI(state, message){
  gpsPermission=state;
  const badge=document.getElementById('permissionState'), btn=document.getElementById('permissionBtn'), start=document.getElementById('startTrip'), info=document.getElementById('gpsInfo');
+ const wbadge=document.getElementById('walkPermissionState'), wbtn=document.getElementById('walkPermissionBtn'), wstart=document.getElementById('startWalk');
  const map={granted:['Granted','text-bg-success'],denied:['Denied','text-bg-danger'],prompt:['Not Requested','text-bg-secondary'],unsupported:['Unsupported','text-bg-danger']};
  const item=map[state]||map.prompt;
  badge.textContent=item[0]; badge.className='badge '+item[1];
- if(state==='granted'){btn.classList.add('d-none');start.disabled=!locationConsent;info.textContent=message||'Location access granted. You can start the trip.';}
- else if(state==='denied'){btn.classList.remove('d-none');start.disabled=true;info.textContent=message||'Location access was denied. Enable location permission in browser settings and try again.';}
- else if(state==='unsupported'){btn.classList.add('d-none');start.disabled=true;info.textContent='This browser/device does not support location services.';}
- else {btn.classList.remove('d-none');start.disabled=true;info.textContent=message||'Location permission has not been requested.';}
+ if(wbadge){wbadge.textContent=item[0]; wbadge.className='badge '+item[1];}
+ if(state==='granted'){
+   btn.classList.add('d-none');start.disabled=!locationConsent;info.textContent=message||'Location access granted. You can start the trip.';
+   if(wbtn)wbtn.classList.add('d-none'); if(wstart)wstart.disabled=!locationConsent;
+ }
+ else if(state==='denied'){
+   btn.classList.remove('d-none');start.disabled=true;info.textContent=message||'Location access was denied. Enable location permission in browser settings and try again.';
+   if(wbtn)wbtn.classList.remove('d-none'); if(wstart)wstart.disabled=true;
+ }
+ else if(state==='unsupported'){
+   btn.classList.add('d-none');start.disabled=true;info.textContent='This browser/device does not support location services.';
+   if(wbtn)wbtn.classList.add('d-none'); if(wstart)wstart.disabled=true;
+ }
+ else {
+   btn.classList.remove('d-none');start.disabled=true;info.textContent=message||'Location permission has not been requested.';
+   if(wbtn)wbtn.classList.remove('d-none'); if(wstart)wstart.disabled=true;
+ }
 }
 
 async function syncBrowserLocationPermission(){
@@ -355,12 +474,6 @@ async function syncBrowserLocationPermission(){
 }
 
 function requestGPSPermission(){
- // Native browser prompts require a secure context (HTTPS) and a real user click.
- if(!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1'){
-   setPermissionUI('denied','Browser location permission can only be requested on HTTPS (or localhost). Open this application using its HTTPS web-app URL, then tap Allow.');
-   showLocationHelp(true);
-   return;
- }
  if(!navigator.geolocation){
    setPermissionUI('unsupported','This browser/device does not support location services.');
    showLocationHelp(true);
@@ -368,9 +481,11 @@ function requestGPSPermission(){
  }
 
  const btn=document.getElementById('permissionBtn');
+ const wbtn=document.getElementById('walkPermissionBtn');
  const retry=document.getElementById('retryLocationBtn');
  btn.disabled=true;
  btn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span> Waiting for browser permission…';
+ if(wbtn){wbtn.disabled=true;wbtn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span> Waiting for permission…';}
 
  // This is deliberately the first location API call made after the
  // user's button click. Do not put an awaited permission check before it.
@@ -385,15 +500,17 @@ function requestGPSPermission(){
      btn.disabled=false;
      btn.innerHTML='<i class="bi bi-geo-alt-fill"></i> Location Access Granted';
      retry.classList.add('d-none');
+     if(wbtn){wbtn.disabled=false;wbtn.innerHTML='<i class="bi bi-geo-alt-fill"></i> Location Access Granted';}
    },
    err=>{
      btn.disabled=false;
      btn.innerHTML='<i class="bi bi-geo-alt-fill"></i> Ask Browser for Location Access';
+     if(wbtn){wbtn.disabled=false;wbtn.innerHTML='<i class="bi bi-geo-alt-fill"></i> Ask Browser for Location Access';}
 
      if(err.code===1){
        locationConsent=false;
        setPermissionUI('denied',
-         'Location permission was denied or blocked. If the browser shows a prompt, choose Allow. If no prompt appears, open this site’s browser permissions, set Location to Allow/Ask, then tap Try Again.');
+         'The browser did not grant location access. If Chrome shows a permission prompt, choose Allow. If no prompt appears, check this website’s Location permission in browser settings.');
        updateBrowserAskStatus('denied');
        showLocationHelp(true);
        retry.classList.remove('d-none');
@@ -425,7 +542,7 @@ function showLocationHelp(show){
 }
 
 document.getElementById('permissionBtn').onclick=()=>{
- locationConsent=false;
+ locationConsent=true;
  showLocationHelp(false);
 
  // IMPORTANT: call the browser geolocation API directly from the user's click.
@@ -434,13 +551,11 @@ document.getElementById('permissionBtn').onclick=()=>{
  // the browser's "Ask first / Sites can ask" state.
  requestGPSPermission();
 };
-document.getElementById('retryLocationBtn').onclick=()=>{
- // Always call the native API directly from the user gesture.
- // If permission was previously blocked, the browser will require the user
- // to change this site's Location setting before it can show the prompt again.
- locationConsent=false;
- showLocationHelp(false);
- requestGPSPermission();
+document.getElementById('retryLocationBtn').onclick=async()=>{
+ locationConsent=true;
+ const state=await syncBrowserLocationPermission();
+ if(state==='prompt') requestGPSPermission();
+ else if(state==='denied') showLocationHelp(true);
 };
 document.getElementById('notNowBtn').onclick=()=>{
  locationConsent=false;
@@ -451,60 +566,194 @@ document.getElementById('notNowBtn').onclick=()=>{
  document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS not enabled';
  showLocationHelp(false);
 };
-// Read the status for display only. The permission button always calls getCurrentPosition directly.
 syncBrowserLocationPermission();
 
-initLiveMap();
-function isWalking(speed){return Number(speed||0)<=10;}
-function updateWalkingUI(speed, steps, calories){
- const walking=isWalking(speed);
- document.getElementById('fuelTripMetric').classList.toggle('d-none',walking);
- document.getElementById('costTripMetric').classList.toggle('d-none',walking);
- document.getElementById('tripSteps').textContent=String(steps||0);
- document.getElementById('tripCalories').textContent=(calories||0).toFixed(1)+' kcal';
- document.getElementById('fuelMetricCard')?.classList.toggle('d-none',walking);
- document.getElementById('walkMetricCard')?.classList.toggle('d-none',!walking);
- document.getElementById('mCalories').textContent=(calories||0).toFixed(1)+' kcal';
- document.getElementById('mSteps')?.classList.toggle('d-none',!walking);
- if(walking){document.getElementById('mVehicle').textContent='Walking';document.getElementById('mVehicleSub').textContent='Movement mode';document.getElementById('mSteps').textContent=(steps||0)+' steps';}
- else {const v=vehicle(document.getElementById('tripVehicle').value);document.getElementById('mVehicle').textContent=v?.name||'—';document.getElementById('mVehicleSub').textContent='Selected vehicle';}
+/* ---------- Shared pause/resume + walking estimate constants ---------- */
+const PAUSE_SPEED=0.5;        // km/h below this counts as "stationary"
+const PAUSE_AFTER_MS=45000;   // how long stationary before auto-pause
+const STRIDE_M={child:0.5,teen:0.65,adult:0.76}; // metres per step estimate
+
+function strideFor(age){ if(!age) return STRIDE_M.adult; if(age<12) return STRIDE_M.child; if(age<18) return STRIDE_M.teen; return STRIDE_M.adult; }
+function metFor(speedKmh){ // rough MET table for walking pace
+ if(speedKmh<3.2) return 2.8;
+ if(speedKmh<4.8) return 3.5;
+ if(speedKmh<5.6) return 4.3;
+ if(speedKmh<6.4) return 5.0;
+ return 7.0; // brisk/jog while still classified as "walking"
 }
-function estimateWalking(last,p){
- if(!last) return 0;
- const d=hav(last,p);
- return d>0.0003 && d<0.05 ? Math.max(0,Math.round(d*1000/0.75)) : 0;
+
+let tripMap=null, tripMarker=null, tripPolyline=null, wakeLock=null;
+function initTripMap(){
+ if(tripMap) return;
+ const el=document.getElementById('tripMap'); if(!el) return;
+ tripMap=L.map(el).setView([20.5937,78.9629],5);
+ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(tripMap);
+ tripPolyline=L.polyline([],{color:'#0d6efd',weight:5}).addTo(tripMap);
 }
+function mapUpdate(p){
+ if(!tripMap) initTripMap();
+ const ll=[p.lat,p.lon];
+ if(!tripMarker){ tripMarker=L.marker(ll).addTo(tripMap); tripMap.setView(ll,17); }
+ else tripMarker.setLatLng(ll);
+ tripPolyline.addLatLng(ll);
+ tripMap.panTo(ll,{animate:true});
+}
+async function requestWakeLock(){ try{ if('wakeLock' in navigator) wakeLock=await navigator.wakeLock.request('screen'); }catch(e){} }
+function releaseWakeLock(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch(e){} }
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && (trip.running||walk.running)) requestWakeLock(); });
+
+function fmtTime(ms){ const s=Math.floor(ms/1000); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
+
+function renderFuelLog(){
+ document.getElementById('fuelLogList').innerHTML=trip.fuelLog.map((f,i)=>`<div class="fuel-log-item d-flex justify-content-between"><span>${f.liters||0} L/kWh</span><span>${money(f.cost)}</span></div>`).join('');
+ document.getElementById('tripFuelAdded').textContent=money(trip.fuelLog.reduce((s,f)=>s+f.cost,0));
+}
+document.getElementById('addFuelBtn').onclick=()=>{
+ if(!trip.running) return;
+ const liters=Number(document.getElementById('fuelLiters').value)||0;
+ const cost=Number(document.getElementById('fuelCost').value)||0;
+ if(!cost && !liters) return alert('Enter litres/kWh or amount.');
+ trip.fuelLog.push({liters,cost,at:Date.now()});
+ document.getElementById('fuelLiters').value='';document.getElementById('fuelCost').value='';
+ renderFuelLog();
+ // Log it immediately as an expense too, so dashboards/reports reflect it right away.
+ const v=vehicle(document.getElementById('tripVehicle').value);
+ state.expenses.push({id:Date.now(),date:new Date().toISOString().slice(0,10),cat:'Fuel',vehicleId:v?.id||'',note:'Mid-trip fuel top-up',payment:'Cash',amount:cost});
+ persist();
+};
 
 document.getElementById('startTrip').onclick=()=>{
- if(trip && trip.running){ return alert('GPS tracking is already running. Press Stop Trip to end tracking.'); }
  if(!locationConsent || gpsPermission!=='granted')return alert('Please first choose “Allow Location Access” and grant the browser location permission. Tracking will begin only when you press Start Trip.');
- trip={running:true,points:[],km:0,steps:0,calories:0};document.getElementById('startTrip').disabled=true;document.getElementById('stopTrip').disabled=false;document.getElementById('gpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking';document.getElementById('gpsInfo').textContent='Tracking location…';
- watchId=navigator.geolocation.watchPosition(pos=>{const now=Date.now();const last=trip.points.at(-1);let speedKmh=Number.isFinite(pos.coords.speed)&&pos.coords.speed>=0?pos.coords.speed*3.6:0;if(last&&now>last.time){const d=hav(last,{lat:pos.coords.latitude,lon:pos.coords.longitude});speedKmh=speedKmh||d/((now-last.time)/3600000);}const p={lat:pos.coords.latitude,lon:pos.coords.longitude,acc:pos.coords.accuracy,time:now,speedKmh:Number(speedKmh.toFixed(1))};if(last){const d=hav(last,p);if(isWalking(p.speedKmh)){trip.steps+=estimateWalking(last,p);trip.calories=trip.steps*0.04;}else if(d>0.002&&d<1)trip.km+=d}trip.points.push(p);lastSpeedKmh=p.speedKmh;const v=vehicle(document.getElementById('tripVehicle').value),fuel=v?trip.km/Number(v.mileage):0,cost=v?fuel*Number(v.rate):0;document.getElementById('tripKm').textContent=trip.km.toFixed(2);document.getElementById('tripFuel').textContent=fuel.toFixed(2);document.getElementById('tripCost').textContent=money(cost);document.getElementById('tripSteps').textContent=trip.steps;document.getElementById('tripCalories').textContent=trip.calories.toFixed(1)+' kcal';updateWalkingUI(p.speedKmh,trip.steps,trip.calories);document.getElementById('gpsSpeed').textContent=p.speedKmh.toFixed(1)+' km/h';document.getElementById('movementMode').textContent=p.speedKmh<=10?'🚶 Walking / stationary':'🚗 Vehicle mode';document.getElementById('gpsInfo').textContent=`Lat ${p.lat.toFixed(5)} • Lon ${p.lon.toFixed(5)} • ±${Math.round(p.acc)}m`; updateLiveMap(p)},err=>{document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS error';alert('GPS error: '+err.message);},{enableHighAccuracy:true,maximumAge:3000,timeout:10000});
+ trip={running:true,paused:false,points:[],km:0,movingMs:0,lastMoveAt:Date.now(),fuelLog:[]};
+ document.getElementById('startTrip').disabled=true;document.getElementById('stopTrip').disabled=false;
+ document.getElementById('gpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking';document.getElementById('gpsInfo').textContent='Tracking location…';
+ document.getElementById('pausedBanner').classList.add('d-none');
+ document.getElementById('fuelAddBox').classList.remove('d-none');
+ initTripMap(); renderFuelLog();
+ requestWakeLock();
+ watchId=navigator.geolocation.watchPosition(pos=>{
+   const p={lat:pos.coords.latitude,lon:pos.coords.longitude,acc:pos.coords.accuracy,time:Date.now()};
+   const last=trip.points.at(-1);
+   let speedKmh=0, dt=0;
+   if(last){
+     const d=hav(last,p); dt=(p.time-last.time)/1000; // seconds
+     if(dt>0) speedKmh=(d*1000/dt)*3.6;
+     if(d>0.002 && d<1){ // ignore GPS noise jumps
+       if(speedKmh<PAUSE_SPEED){
+         if(!trip.paused && (Date.now()-trip.lastMoveAt)>PAUSE_AFTER_MS){
+           trip.paused=true;
+           document.getElementById('pausedBanner').classList.remove('d-none');
+           document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> Auto-paused';
+         }
+       } else {
+         trip.lastMoveAt=Date.now();
+         if(trip.paused){ trip.paused=false; document.getElementById('pausedBanner').classList.add('d-none'); document.getElementById('gpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking'; }
+         if(!trip.paused){ trip.km+=d; trip.movingMs+=dt*1000; }
+       }
+     }
+   }
+   trip.points.push(p);
+   mapUpdate(p);
+   const v=vehicle(document.getElementById('tripVehicle').value);
+   const fuel=v?trip.km/Number(v.mileage):0, cost=v?fuel*Number(v.rate):0;
+   document.getElementById('tripKm').textContent=trip.km.toFixed(2);
+   document.getElementById('tripTime').textContent=fmtTime(trip.movingMs);
+   document.getElementById('tripSpeed').textContent=speedKmh.toFixed(1);
+   document.getElementById('tripFuel').textContent=fuel.toFixed(2);
+   document.getElementById('tripCost').textContent=money(cost);
+   document.getElementById('gpsInfo').textContent=`Lat ${p.lat.toFixed(5)} • Lon ${p.lon.toFixed(5)} • ±${Math.round(p.acc)}m`;
+ },err=>{document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS error';alert('GPS error: '+err.message);},{enableHighAccuracy:true,maximumAge:3000,timeout:10000});
 };
-// Keep GPS tracking active while the user navigates between app sections.
-// Tracking is ended only by the explicit Stop Trip button or when the page is closed.
-window.addEventListener('beforeunload', (event)=>{
- if(trip && trip.running){
-   event.preventDefault();
-   event.returnValue='GPS tracking is active. Stop the trip before leaving this page.';
-   return event.returnValue;
- }
-});
-
 document.getElementById('stopTrip').onclick=()=>{
  if(watchId!==null)navigator.geolocation.clearWatch(watchId);watchId=null;
+ if(!walk.running) releaseWakeLock();
  const v=vehicle(document.getElementById('tripVehicle').value);const fuel=v?trip.km/v.mileage:0,cost=v?fuel*v.rate:0;
- if(trip.km>0){state.trips.push({id:Date.now(),date:new Date().toLocaleString('en-IN'),vehicleId:v?.id,purpose:document.getElementById('tripPurpose').value||'Trip',km:Number(trip.km.toFixed(3)),fuel:Number(fuel.toFixed(3)),cost:Number(cost.toFixed(2)),points:trip.points,steps:trip.steps||0,calories:trip.calories||0})}
- trip.running=false;resetLiveMap();document.getElementById('startTrip').disabled=false;document.getElementById('stopTrip').disabled=true;document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS idle';persist();renderAll();alert(isWalking(lastSpeedKmh)?'Trip saved. Steps: '+(trip.steps||0)+'; Calories: '+(trip.calories||0).toFixed(1)+' kcal':'Trip saved. Distance: '+trip.km.toFixed(2)+' km; Fuel cost: '+money(cost));
+ const fuelPurchased=trip.fuelLog.reduce((s,f)=>s+f.cost,0);
+ if(trip.km>0){state.trips.push({id:Date.now(),date:new Date().toLocaleString('en-IN'),vehicleId:v?.id,purpose:document.getElementById('tripPurpose').value||'Trip',km:Number(trip.km.toFixed(3)),fuel:Number(fuel.toFixed(3)),cost:Number(cost.toFixed(2)),fuelPurchased:Number(fuelPurchased.toFixed(2)),fuelLog:trip.fuelLog,points:trip.points})}
+ trip.running=false;document.getElementById('startTrip').disabled=false;document.getElementById('stopTrip').disabled=true;document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS idle';
+ document.getElementById('pausedBanner').classList.add('d-none'); document.getElementById('fuelAddBox').classList.add('d-none');
+ persist();renderAll();
+ alert(`Trip saved.\nDistance: ${trip.km.toFixed(2)} km\nEst. fuel cost: ${money(cost)} • Fuel purchased: ${money(fuelPurchased)}`);
 }
-function renderTrips(){document.getElementById('tripRows').innerHTML=state.trips.slice().reverse().map(t=>`<tr><td>${t.date}</td><td>${vehicle(t.vehicleId)?.name||'-'}</td><td>${t.purpose}</td><td>${t.km.toFixed(2)} km</td><td>${t.fuel.toFixed(2)} L</td><td>${money(t.cost)}</td></tr>`).join('')||'<tr><td colspan=6 class="text-center muted">No trips saved</td></tr>'}
+function renderTrips(){document.getElementById('tripRows').innerHTML=state.trips.slice().reverse().map(t=>`<tr><td>${t.date}</td><td>${vehicle(t.vehicleId)?.name||'-'}</td><td>${t.purpose}</td><td>${(t.km||0).toFixed(2)} km</td><td>${(t.fuel||0).toFixed(2)} L</td><td>${money(t.cost)}</td><td>${money(t.fuelPurchased||0)}</td></tr>`).join('')||'<tr><td colspan=7 class="text-center muted">No trips saved</td></tr>'}
+/* ---------- Walking module: its own independent live tracker, map and history (kept fully separate from vehicle GPS Trip) ---------- */
+let walkMap=null, walkMarker=null, walkPolyline=null, walkWatchId=null;
+let walk={running:false,paused:false,points:[],km:0,steps:0,calories:0,movingMs:0,lastMoveAt:Date.now()};
+function initWalkMap(){
+ if(walkMap) return;
+ const el=document.getElementById('walkMap'); if(!el) return;
+ walkMap=L.map(el).setView([20.5937,78.9629],5);
+ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(walkMap);
+ walkPolyline=L.polyline([],{color:'#198754',weight:5}).addTo(walkMap);
+}
+function walkMapUpdate(p){
+ if(!walkMap) initWalkMap();
+ const ll=[p.lat,p.lon];
+ if(!walkMarker){ walkMarker=L.marker(ll).addTo(walkMap); walkMap.setView(ll,17); }
+ else walkMarker.setLatLng(ll);
+ walkPolyline.addLatLng(ll);
+ walkMap.panTo(ll,{animate:true});
+}
+document.getElementById('walkPermissionBtn').onclick=()=>{ locationConsent=true; showLocationHelp(false); requestGPSPermission(); };
+document.getElementById('startWalk').onclick=()=>{
+ if(!locationConsent || gpsPermission!=='granted')return alert('Please first choose “Ask Browser for Location Access” and grant the browser location permission. Tracking will begin only when you press Start Walk.');
+ walk={running:true,paused:false,points:[],km:0,steps:0,calories:0,movingMs:0,lastMoveAt:Date.now()};
+ document.getElementById('startWalk').disabled=true;document.getElementById('stopWalk').disabled=false;
+ document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking';document.getElementById('walkGpsInfo').textContent='Tracking location…';
+ document.getElementById('walkPausedBanner').classList.add('d-none');
+ initWalkMap(); requestWakeLock();
+ walkWatchId=navigator.geolocation.watchPosition(pos=>{
+   const p={lat:pos.coords.latitude,lon:pos.coords.longitude,acc:pos.coords.accuracy,time:Date.now()};
+   const last=walk.points.at(-1);
+   let speedKmh=0, dt=0;
+   if(last){
+     const d=hav(last,p); dt=(p.time-last.time)/1000;
+     if(dt>0) speedKmh=(d*1000/dt)*3.6;
+     if(d>0.002 && d<1){
+       if(speedKmh<PAUSE_SPEED){
+         if(!walk.paused && (Date.now()-walk.lastMoveAt)>PAUSE_AFTER_MS){
+           walk.paused=true;
+           document.getElementById('walkPausedBanner').classList.remove('d-none');
+           document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot"></span> Auto-paused';
+         }
+       } else {
+         walk.lastMoveAt=Date.now();
+         if(walk.paused){ walk.paused=false; document.getElementById('walkPausedBanner').classList.add('d-none'); document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking'; }
+         if(!walk.paused){
+           walk.km+=d; walk.movingMs+=dt*1000;
+           const w=activeWalker();
+           walk.steps+=Math.round((d*1000)/strideFor(w?.age));
+           if(w?.weight) walk.calories+=metFor(speedKmh)*w.weight*(dt/3600);
+         }
+       }
+     }
+   }
+   walk.points.push(p);
+   walkMapUpdate(p);
+   document.getElementById('walkKm').textContent=walk.km.toFixed(2);
+   document.getElementById('walkTime').textContent=fmtTime(walk.movingMs);
+   document.getElementById('walkSpeed').textContent=speedKmh.toFixed(1);
+   document.getElementById('walkSteps').textContent=Math.round(walk.steps);
+   document.getElementById('walkCalories').textContent=Math.round(walk.calories);
+   document.getElementById('walkGpsInfo').textContent=`Lat ${p.lat.toFixed(5)} • Lon ${p.lon.toFixed(5)} • ±${Math.round(p.acc)}m`;
+ },err=>{document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot"></span> GPS error';alert('GPS error: '+err.message);},{enableHighAccuracy:true,maximumAge:3000,timeout:10000});
+};
+document.getElementById('stopWalk').onclick=()=>{
+ if(walkWatchId!==null)navigator.geolocation.clearWatch(walkWatchId);walkWatchId=null;
+ if(!trip.running) releaseWakeLock();
+ const w=activeWalker();
+ if(walk.km>0){ state.walks=state.walks||[]; state.walks.push({id:Date.now(),date:new Date().toLocaleString('en-IN'),walkerId:w?.id,walkerName:w?.name||'—',note:document.getElementById('walkPurpose').value||'Walk',km:Number(walk.km.toFixed(3)),movingMs:walk.movingMs,steps:Math.round(walk.steps),calories:Math.round(walk.calories),points:walk.points}); }
+ walk.running=false;document.getElementById('startWalk').disabled=false;document.getElementById('stopWalk').disabled=true;document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot"></span> GPS idle';
+ document.getElementById('walkPausedBanner').classList.add('d-none');
+ persist();renderWalkHistory();
+ alert(`Walk saved.\nDistance: ${walk.km.toFixed(2)} km\nSteps: ${Math.round(walk.steps)} • Calories: ${Math.round(walk.calories)} kcal`);
+};
+function renderWalkHistory(){document.getElementById('walkRows').innerHTML=(state.walks||[]).slice().reverse().map(w=>`<tr><td>${w.date}</td><td>${w.walkerName||'-'}</td><td>${w.note||''}</td><td>${(w.km||0).toFixed(2)} km</td><td>${fmtTime(w.movingMs||0)}</td><td>${w.steps||0}</td><td>${w.calories||0} kcal</td></tr>`).join('')||'<tr><td colspan=7 class="text-center muted">No walks saved</td></tr>'}
 function renderReports(){const cats={};state.expenses.forEach(e=>cats[e.cat]=(cats[e.cat]||0)+Number(e.amount));document.getElementById('reportExpense').innerHTML=Object.entries(cats).map(([k,v])=>`<div class="d-flex justify-content-between border-bottom py-2"><span>${k}</span><b>${money(v)}</b></div>`).join('')||'No data';const vs={};state.trips.forEach(t=>{const n=vehicle(t.vehicleId)?.name||'Unknown';vs[n]=(vs[n]||0)+t.km});document.getElementById('reportVehicle').innerHTML=Object.entries(vs).map(([k,v])=>`<div class="d-flex justify-content-between border-bottom py-2"><span>${k}</span><b>${v.toFixed(1)} km</b></div>`).join('')||'No data'}
 function saveSettings(){state.settings.rate=Number(document.getElementById('defaultRate').value)||105;persist();alert('Settings saved.')}
 function renderUsers(){if(currentUser!=='admin')return;document.getElementById('userRows').innerHTML=state.users.map((u,i)=>`<tr><td>${u.business}</td><td>${u.username}</td><td>${u.plan}</td><td>${u.expiry}</td><td><span class="badge ${u.status==='Active'?'text-bg-success':'text-bg-warning'}">${u.status}</span></td><td><button class="btn btn-sm btn-outline-secondary" onclick="toggleUser(${i})">Toggle</button></td></tr>`).join('')}
-function addUser(){const u={business:document.getElementById('uBusiness').value,username:document.getElementById('uName').value,plan:document.getElementById('uPlan').value,expiry:new Date(Date.now()+30*864e5).toISOString().slice(0,10),status:document.getElementById('uStatus').value};if(!u.business||!u.username)return alert('Enter business and username.');state.users.push(u);persist();bootstrap.Modal.getInstance(document.getElementById('userModal')).hide();renderUsers();alert('Subscriber created. In production, credentials should be generated/stored by the Apps Script backend.')}
+function addUser(){const u={business:document.getElementById('uBusiness').value,username:document.getElementById('uName').value,plan:document.getElementById('uPlan').value,expiry:new Date(Date.now()+30*864e5).toISOString().slice(0,10),status:document.getElementById('uStatus').value};if(!u.business||!u.username)return alert('Enter business and username.');state.users.push(u);persist();bootstrap.Modal.getInstance(document.getElementById('userModal')).hide();document.getElementById('uBusiness').value='';document.getElementById('uName').value='';document.getElementById('uPass').value='';renderUsers();alert('Subscriber created. In production, credentials should be generated/stored by the Apps Script backend.')}
 function toggleUser(i){state.users[i].status=state.users[i].status==='Active'?'Pending':'Active';persist();renderUsers()}
-document.getElementById('navToggle')?.addEventListener('click',()=>{const side=document.getElementById('sideBar');const expanded=side.classList.toggle('open');document.getElementById('navToggle').setAttribute('aria-expanded',String(expanded));});
-document.querySelectorAll('[data-view]').forEach(a=>a.addEventListener('click',()=>{if(window.innerWidth<=991){document.getElementById('sideBar')?.classList.remove('open');document.getElementById('navToggle')?.setAttribute('aria-expanded','false');}}));
 document.getElementById('eDate').value=new Date().toISOString().slice(0,10);
 </script>
 </body>
