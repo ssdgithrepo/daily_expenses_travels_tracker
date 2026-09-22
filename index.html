@@ -105,6 +105,7 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 </header>
 
 <section id="dashboard" class="view active">
+ <div id="recoveryBanners"></div>
  <div class="row g-3">
   <div class="col-md-3"><div class="card p-3"><div class="muted">This Month Expense</div><div id="mExpense" class="metric">₹0</div><small class="text-success">All categories</small></div></div>
   <div class="col-md-3"><div class="card p-3"><div class="muted">Distance</div><div id="mDistance" class="metric">0 km</div><small>Tracked trips</small></div></div>
@@ -271,7 +272,14 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 <section id="reports" class="view"><div class="row g-3"><div class="col-md-6"><div class="card p-4"><h5><i class="bi bi-cash-stack me-2"></i>Expense Summary</h5><div id="reportExpense"></div></div></div><div class="col-md-6"><div class="card p-4"><h5><i class="bi bi-car-front-fill me-2"></i>Vehicle Running Summary</h5><div id="reportVehicle"></div></div></div></div></section>
 
 <section id="settings" class="view"><div class="card p-4"><h5><i class="bi bi-gear-fill me-2"></i>Settings</h5><div class="row g-3 mt-1"><div class="col-md-6"><label class="form-label">Default petrol rate (₹/L)</label><input id="defaultRate" type="number" class="form-control"></div><div class="col-md-6"><label class="form-label">Currency</label><input class="form-control" value="INR (₹)" disabled></div>
-<div class="col-12"><label class="form-label">Google Maps API Key</label><input id="gmapsKey" class="form-control" placeholder="Paste your Google Maps JavaScript API key"><div class="small muted mt-1">Required for the live GPS map (GPS Trip &amp; Walking Profile). Create a key in Google Cloud Console with the <b>Maps JavaScript API</b> enabled, then paste it here. The key is stored only in this browser.</div></div>
+<div class="col-12"><label class="form-label">Google Maps API Key</label><input id="gmapsKey" class="form-control" placeholder="Paste your Google Maps JavaScript API key"><div class="small muted mt-1">Required for the live GPS map (GPS Trip &amp; Walking Profile). Create a key in Google Cloud Console with the <b>Maps JavaScript API</b> and <b>Places API</b> enabled, then paste it here. The key is stored only in this browser.</div></div>
+<div class="col-12">
+ <div class="form-check form-switch">
+   <input class="form-check-input" type="checkbox" id="autoTripToggle" checked>
+   <label class="form-check-label" for="autoTripToggle"><b>Auto-detect trips &amp; walks</b></label>
+ </div>
+ <div class="small muted mt-1">Once you grant location access, tracking starts on its own as soon as you start moving — no need to tap Start. If you go quiet for 20 minutes, the trip/walk is automatically saved so nothing is ever lost, even if you forget to press Stop.</div>
+</div>
 <div class="col-12"><button class="btn btn-primary" onclick="saveSettings()">Save Settings</button></div></div><hr><h6>Google Sheets Production Mode</h6><p class="small muted">Paste your deployed Google Apps Script Web App URL in the backend configuration when moving from Demo Mode.</p></div></section>
 
 <section id="admin" class="view"><div class="card p-4"><div class="d-flex justify-content-between"><div><h5><i class="bi bi-shield-lock-fill me-2"></i>Master Admin Console</h5><div class="muted small">Subscriber authentication and plan control</div></div><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#userModal"><i class="bi bi-person-plus"></i> Create Subscriber</button></div>
@@ -294,7 +302,7 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 <script>
 const KEY='srd_driveledger_demo_v1';
 const DEMO_DEFAULTS={
- settings:{rate:105,gmapsKey:''},
+ settings:{rate:105,gmapsKey:'',autoTrip:true},
  vehicles:[
   {id:1,name:'MH-31 AB 1234',type:'Two Wheeler',fuel:'Petrol',mileage:45,rate:105,active:true},
   {id:2,name:'MH-31 XY 5678',type:'Three Wheeler',fuel:'CNG',mileage:28,rate:92,active:true}
@@ -342,7 +350,7 @@ function login(){
   if(navAdmin) navAdmin.classList.toggle('d-none',u!=='admin');
   const welcome=document.getElementById('welcome');
   if(welcome) welcome.textContent=u==='admin'?'Master Administrator':'Welcome, Demo Subscriber';
-  try{ renderAll(); }catch(e){ console.error(e); alert('Login successful, but the dashboard could not finish loading. Please refresh once.'); }
+  try{ renderAll(); checkRecoverableSessions(); }catch(e){ console.error(e); alert('Login successful, but the dashboard could not finish loading. Please refresh once.'); }
  } else {
   alert('Invalid demo credentials.\nSubscriber: demo / demo123\nAdmin: admin / admin123');
  }
@@ -407,7 +415,7 @@ function showView(id){
  if(id==='trip'){initTripMap();setTimeout(()=>{if(tripMap&&window.google)google.maps.event.trigger(tripMap,'resize')},150);}
  if(id==='walking'){initWalkMap();setTimeout(()=>{if(walkMap&&window.google)google.maps.event.trigger(walkMap,'resize')},150);}
 }
-function renderAll(){renderDashboard();renderExpenses();renderVehicles();renderWalkers();renderSelects();renderTrips();renderWalkHistory();renderUsers();document.getElementById('defaultRate').value=state.settings.rate;const gk=document.getElementById('gmapsKey');if(gk)gk.value=state.settings.gmapsKey||''}
+function renderAll(){renderDashboard();renderExpenses();renderVehicles();renderWalkers();renderSelects();renderTrips();renderWalkHistory();renderUsers();document.getElementById('defaultRate').value=state.settings.rate;const gk=document.getElementById('gmapsKey');if(gk)gk.value=state.settings.gmapsKey||'';const at=document.getElementById('autoTripToggle');if(at)at.checked=state.settings.autoTrip!==false}
 const CATEGORY_META={
  Fuel:{icon:'bi-fuel-pump-fill',color:'#0d6efd'},
  Food:{icon:'bi-cup-hot-fill',color:'#fd7e14'},
@@ -433,6 +441,60 @@ function renderDashboard(){
  }).join(''):'<div class="muted small">No expenses recorded yet.</div>';
  document.getElementById('categoryTotal').textContent=money(grand);
 }
+/* ---------- Crash/forgot-to-stop recovery: if a trip or walk was left running when the
+   tab closed unexpectedly, this offers to save it (or discard it) on next login. ---------- */
+function checkRecoverableSessions(){
+ const box=document.getElementById('recoveryBanners'); if(box) box.innerHTML='';
+ try{
+   const rawT=localStorage.getItem(ACTIVE_TRIP_KEY);
+   if(rawT){
+     const snap=JSON.parse(rawT);
+     if(snap && snap.trip && snap.trip.km>0.01) showRecoveryBanner('trip',snap);
+     else localStorage.removeItem(ACTIVE_TRIP_KEY);
+   }
+ }catch(e){ localStorage.removeItem(ACTIVE_TRIP_KEY); }
+ try{
+   const rawW=localStorage.getItem(ACTIVE_WALK_KEY);
+   if(rawW){
+     const snap=JSON.parse(rawW);
+     if(snap && snap.walk && snap.walk.km>0.01) showRecoveryBanner('walk',snap);
+     else localStorage.removeItem(ACTIVE_WALK_KEY);
+   }
+ }catch(e){ localStorage.removeItem(ACTIVE_WALK_KEY); }
+}
+function showRecoveryBanner(kind,snap){
+ const box=document.getElementById('recoveryBanners'); if(!box) return;
+ const km=(kind==='trip'?snap.trip.km:snap.walk.km)||0;
+ const when=snap.savedAt?new Date(snap.savedAt).toLocaleString('en-IN'):'a previous session';
+ const div=document.createElement('div');
+ div.className='alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2';
+ div.innerHTML=`<div><i class="bi bi-exclamation-triangle-fill me-1"></i> Found an unsaved ${kind} from ${when} (${km.toFixed(2)} km) that never got stopped — it looks like the page closed unexpectedly.</div><div class="d-flex gap-2"><button class="btn btn-sm btn-primary">Save it</button><button class="btn btn-sm btn-outline-secondary">Discard</button></div>`;
+ div.querySelector('.btn-primary').onclick=()=>kind==='trip'?recoverTrip():recoverWalk();
+ div.querySelector('.btn-outline-secondary').onclick=()=>kind==='trip'?discardTripRecovery():discardWalkRecovery();
+ box.appendChild(div);
+}
+function recoverTrip(){
+ const raw=localStorage.getItem(ACTIVE_TRIP_KEY); if(!raw) return;
+ const snap=JSON.parse(raw);
+ const v=vehicle(snap.vehicleId);
+ const km=snap.trip.km||0, fuel=v?km/Number(v.mileage):0, cost=v?fuel*Number(v.rate):0;
+ const fuelPurchased=(snap.trip.fuelLog||[]).reduce((s,f)=>s+f.cost,0);
+ state.trips.push({id:Date.now(),date:new Date(snap.savedAt||Date.now()).toLocaleString('en-IN'),vehicleId:v?.id,purpose:snap.purpose||'Recovered trip',km:Number(km.toFixed(3)),fuel:Number(fuel.toFixed(3)),cost:Number(cost.toFixed(2)),fuelPurchased:Number(fuelPurchased.toFixed(2)),fuelLog:snap.trip.fuelLog||[],points:snap.trip.points||[],recovered:true});
+ localStorage.removeItem(ACTIVE_TRIP_KEY);
+ persist(); renderAll(); checkRecoverableSessions();
+}
+function discardTripRecovery(){ localStorage.removeItem(ACTIVE_TRIP_KEY); checkRecoverableSessions(); }
+function recoverWalk(){
+ const raw=localStorage.getItem(ACTIVE_WALK_KEY); if(!raw) return;
+ const snap=JSON.parse(raw);
+ const w=state.walkers?.find(x=>String(x.id)===String(snap.walkerId));
+ const km=snap.walk.km||0;
+ state.walks=state.walks||[];
+ state.walks.push({id:Date.now(),date:new Date(snap.savedAt||Date.now()).toLocaleString('en-IN'),walkerId:w?.id,walkerName:w?.name||'—',note:snap.note||'Recovered walk',km:Number(km.toFixed(3)),movingMs:snap.walk.movingMs||0,steps:Math.round(snap.walk.steps||0),calories:Math.round(snap.walk.calories||0),points:snap.walk.points||[],recovered:true});
+ localStorage.removeItem(ACTIVE_WALK_KEY);
+ persist(); renderAll(); checkRecoverableSessions();
+}
+function discardWalkRecovery(){ localStorage.removeItem(ACTIVE_WALK_KEY); checkRecoverableSessions(); }
 function renderExpenses(){
  const q=(document.getElementById('expenseSearch')?.value||'').toLowerCase(),f=document.getElementById('expenseFilter')?.value||'';
  document.getElementById('expenseRows').innerHTML=state.expenses.filter(e=>(!q||(e.note||'').toLowerCase().includes(q)||e.cat.toLowerCase().includes(q))&&(!f||e.cat===f)).slice().reverse().map(e=>`<tr><td>${e.date}</td><td>${e.cat}</td><td>${vehicle(e.vehicleId)?.name||'-'}</td><td>${e.note||''}</td><td>${e.payment}</td><td class="text-end">${money(e.amount)}</td><td><button class="btn btn-sm btn-outline-danger" onclick="delExpense(${e.id})"><i class="bi bi-trash"></i></button></td></tr>`).join('')||'<tr><td colspan=7 class="text-center muted">No matching expenses</td></tr>';
@@ -532,6 +594,7 @@ function requestGPSPermission(){
      btn.innerHTML='<i class="bi bi-geo-alt-fill"></i> Location Access Granted';
      retry.classList.add('d-none');
      if(wbtn){wbtn.disabled=false;wbtn.innerHTML='<i class="bi bi-geo-alt-fill"></i> Location Access Granted';}
+     beginTripWatch(); beginWalkWatch(); // start listening in the background so a trip/walk can be auto-detected
    },
    err=>{
      btn.disabled=false;
@@ -602,6 +665,13 @@ syncBrowserLocationPermission();
 /* ---------- Shared pause/resume + walking estimate constants ---------- */
 const PAUSE_SPEED=0.5;        // km/h below this counts as "stationary"
 const PAUSE_AFTER_MS=45000;   // how long stationary before auto-pause
+const AUTO_START_SPEED=3;       // km/h sustained to auto-start a vehicle trip
+const WALK_AUTO_START_SPEED=1.2;// km/h sustained to auto-start a walk
+const AUTO_START_AFTER_MS=12000;// how long that movement must sustain before auto-starting
+const AUTO_STOP_IDLE_MS=20*60*1000; // auto-save & stop a trip/walk after this long continuously paused
+const AUTOSAVE_MS=15000;        // how often the in-progress trip/walk is snapshotted so nothing is lost
+const ACTIVE_TRIP_KEY='srd_active_trip_v1';
+const ACTIVE_WALK_KEY='srd_active_walk_v1';
 const STRIDE_M={child:0.5,teen:0.65,adult:0.76}; // metres per step estimate
 
 function strideFor(age){ if(!age) return STRIDE_M.adult; if(age<12) return STRIDE_M.child; if(age<18) return STRIDE_M.teen; return STRIDE_M.adult; }
@@ -629,10 +699,74 @@ function ensureGoogleMaps(cb){
    gmapsCallbacks=[];
  };
  const s=document.createElement('script');
- s.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=__gmapsReady`;
+ s.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&callback=__gmapsReady`;
  s.async=true; s.defer=true;
  s.onerror=()=>{ gmapsLoading=false; alert('Google Maps failed to load. Check the API key in Settings and that the Maps JavaScript API is enabled for it.'); };
  document.head.appendChild(s);
+}
+/* Standard Google Maps look & controls: map type (roadmap/satellite/hybrid/terrain),
+   street view pegman, zoom, fullscreen, one-finger pan, plus a search box,
+   a "my location" button and a traffic layer toggle — added as real in-map controls. */
+function fullMapOptions(){
+ return {
+   center:{lat:20.5937,lng:78.9629}, zoom:5,
+   mapTypeId:'roadmap',
+   mapTypeControl:true,
+   mapTypeControlOptions:{style:google.maps.MapTypeControlStyle.HORIZONTAL_BAR,mapTypeIds:['roadmap','satellite','hybrid','terrain']},
+   streetViewControl:true,
+   fullscreenControl:true,
+   zoomControl:true,
+   scaleControl:true,
+   rotateControl:true,
+   gestureHandling:'greedy',
+   clickableIcons:false
+ };
+}
+function addMapExtras(map){
+ // Search box (Google Places autocomplete) — jump the map to any place
+ const input=document.createElement('input');
+ input.type='text'; input.placeholder='Search Google Maps';
+ input.className='form-control shadow-sm';
+ input.style.cssText='width:min(280px,60vw);margin:10px;';
+ map.controls[google.maps.ControlPosition.TOP_LEFT].push(input);
+ try{
+   const autocomplete=new google.maps.places.Autocomplete(input);
+   autocomplete.bindTo('bounds',map);
+   autocomplete.addListener('place_changed',()=>{
+     const place=autocomplete.getPlace();
+     if(place.geometry){ map.panTo(place.geometry.location); map.setZoom(place.geometry.viewport?15:17); }
+   });
+ }catch(e){ console.warn('Places Autocomplete unavailable — enable the Places API for this key.'); }
+
+ // My location button
+ const locBtn=document.createElement('button');
+ locBtn.type='button'; locBtn.title='My location';
+ locBtn.innerHTML='<i class="bi bi-crosshair"></i>';
+ locBtn.className='btn btn-light shadow-sm';
+ locBtn.style.cssText='margin:10px;width:40px;height:40px;border-radius:50%;';
+ locBtn.onclick=()=>{
+   if(!navigator.geolocation)return;
+   navigator.geolocation.getCurrentPosition(pos=>{
+     map.panTo({lat:pos.coords.latitude,lng:pos.coords.longitude}); map.setZoom(16);
+   });
+ };
+ map.controls[google.maps.ControlPosition.RIGHT_BOTTOM].push(locBtn);
+
+ // Live traffic layer toggle
+ const trafficLayer=new google.maps.TrafficLayer();
+ let trafficOn=false;
+ const trafficBtn=document.createElement('button');
+ trafficBtn.type='button'; trafficBtn.title='Toggle live traffic';
+ trafficBtn.innerHTML='<i class="bi bi-signpost-split-fill"></i>';
+ trafficBtn.className='btn btn-light shadow-sm';
+ trafficBtn.style.cssText='margin:10px;width:40px;height:40px;border-radius:50%;';
+ trafficBtn.onclick=()=>{
+   trafficOn=!trafficOn;
+   trafficLayer.setMap(trafficOn?map:null);
+   trafficBtn.classList.toggle('btn-primary',trafficOn);
+   trafficBtn.classList.toggle('btn-light',!trafficOn);
+ };
+ map.controls[google.maps.ControlPosition.RIGHT_BOTTOM].push(trafficBtn);
 }
 /* ---------- Vehicle / walker marker icons: a distinct icon per vehicle type, shown on the live map ---------- */
 const VEHICLE_ICON_MAP={
@@ -666,7 +800,8 @@ function initTripMap(){
  ensureGoogleMaps(()=>{
    if(tripMap) return;
    const el=document.getElementById('tripMap'); if(!el) return;
-   tripMap=new google.maps.Map(el,{center:{lat:20.5937,lng:78.9629},zoom:5,mapTypeControl:false,streetViewControl:false,fullscreenControl:false,clickableIcons:false});
+   tripMap=new google.maps.Map(el,fullMapOptions());
+   addMapExtras(tripMap);
    tripPolyline=new google.maps.Polyline({path:tripPath,strokeColor:'#0d6efd',strokeWeight:5});
    tripPolyline.setMap(tripMap);
  });
@@ -694,6 +829,100 @@ function renderFuelLog(){
  document.getElementById('fuelLogList').innerHTML=trip.fuelLog.map((f,i)=>`<div class="fuel-log-item d-flex justify-content-between"><span>${f.liters||0} L/kWh</span><span>${money(f.cost)}</span></div>`).join('');
  document.getElementById('tripFuelAdded').textContent=money(trip.fuelLog.reduce((s,f)=>s+f.cost,0));
 }
+document.getElementById('startTrip').onclick=()=>{
+ if(!locationConsent || gpsPermission!=='granted')return alert('Please first choose “Allow Location Access” and grant the browser location permission. Tracking will begin only when you press Start Trip.');
+ startTripInternal(false);
+};
+document.getElementById('stopTrip').onclick=()=>finishTrip('manual');
+
+let tripStandbyMovingSince=null, tripStandbyLastPoint=null, lastTripAutosave=0;
+
+function startTripInternal(auto){
+ trip={running:true,paused:false,points:[],km:0,movingMs:0,lastMoveAt:Date.now(),idleSince:null,fuelLog:[]};
+ tripPath=[]; if(tripPolyline)tripPolyline.setPath(tripPath); if(tripMarker){tripMarker.setMap(null);tripMarker=null;}
+ tripStandbyMovingSince=null; tripStandbyLastPoint=null;
+ document.getElementById('startTrip').disabled=true;document.getElementById('stopTrip').disabled=false;
+ document.getElementById('gpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking';
+ document.getElementById('gpsInfo').textContent=auto?'Movement detected — trip started automatically.':'Tracking location…';
+ document.getElementById('pausedBanner').classList.add('d-none');
+ document.getElementById('fuelAddBox').classList.remove('d-none');
+ initTripMap(); renderFuelLog();
+ requestWakeLock();
+ beginTripWatch();
+}
+
+function beginTripWatch(){
+ if(watchId!==null) return; // one continuous watch: handles standby auto-start AND active tracking
+ watchId=navigator.geolocation.watchPosition(tripGpsTick,
+   err=>{document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS error';console.warn('GPS error:',err.message);},
+   {enableHighAccuracy:true,maximumAge:3000,timeout:10000});
+}
+
+function tripGpsTick(pos){
+ const p={lat:pos.coords.latitude,lon:pos.coords.longitude,acc:pos.coords.accuracy,time:Date.now()};
+ if(!trip.running){ handleTripStandby(p); return; }
+ const last=trip.points.at(-1);
+ let speedKmh=0, dt=0;
+ if(last){
+   const d=hav(last,p); dt=(p.time-last.time)/1000; // seconds
+   if(dt>0) speedKmh=(d*1000/dt)*3.6;
+   if(d>0.002 && d<1){ // ignore GPS noise jumps
+     if(speedKmh<PAUSE_SPEED){
+       if(!trip.paused && (Date.now()-trip.lastMoveAt)>PAUSE_AFTER_MS){
+         trip.paused=true; trip.idleSince=Date.now();
+         document.getElementById('pausedBanner').classList.remove('d-none');
+         document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> Auto-paused';
+       }
+     } else {
+       trip.lastMoveAt=Date.now(); trip.idleSince=null;
+       if(trip.paused){ trip.paused=false; document.getElementById('pausedBanner').classList.add('d-none'); document.getElementById('gpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking'; }
+       if(!trip.paused){ trip.km+=d; trip.movingMs+=dt*1000; }
+     }
+   }
+ }
+ trip.points.push(p);
+ mapUpdate(p);
+ const v=vehicle(document.getElementById('tripVehicle').value);
+ const fuel=v?trip.km/Number(v.mileage):0, cost=v?fuel*Number(v.rate):0;
+ document.getElementById('tripKm').textContent=trip.km.toFixed(2);
+ document.getElementById('tripTime').textContent=fmtTime(trip.movingMs);
+ document.getElementById('tripSpeed').textContent=speedKmh.toFixed(1);
+ document.getElementById('tripFuel').textContent=fuel.toFixed(2);
+ document.getElementById('tripCost').textContent=money(cost);
+ document.getElementById('gpsInfo').textContent=`Lat ${p.lat.toFixed(5)} • Lon ${p.lon.toFixed(5)} • ±${Math.round(p.acc)}m`;
+ // Failsafe: if left paused for too long (forgot to press Stop), auto-save & finish so the trip is never lost.
+ if(trip.paused && trip.idleSince && (Date.now()-trip.idleSince)>AUTO_STOP_IDLE_MS){ finishTrip('idle'); return; }
+ // Periodic snapshot to localStorage so a closed tab/crash never loses progress.
+ if(Date.now()-lastTripAutosave>AUTOSAVE_MS){ lastTripAutosave=Date.now(); autosaveActiveTrip(); }
+}
+
+function handleTripStandby(p){
+ if(state.settings.autoTrip===false) return; // auto-detect turned off in Settings
+ if(!document.getElementById('tripVehicle').value) return; // need a vehicle selected first
+ let speedKmh=0;
+ if(tripStandbyLastPoint){
+   const d=hav(tripStandbyLastPoint,p), dt=(p.time-tripStandbyLastPoint.time)/1000;
+   if(dt>0) speedKmh=(d*1000/dt)*3.6;
+ }
+ tripStandbyLastPoint=p;
+ if(speedKmh>=AUTO_START_SPEED){
+   if(!tripStandbyMovingSince) tripStandbyMovingSince=Date.now();
+   if(Date.now()-tripStandbyMovingSince>=AUTO_START_AFTER_MS){ startTripInternal(true); }
+ } else {
+   tripStandbyMovingSince=null;
+ }
+}
+
+function autosaveActiveTrip(){
+ try{
+   if(trip.running && trip.km>0){
+     localStorage.setItem(ACTIVE_TRIP_KEY,JSON.stringify({trip,vehicleId:document.getElementById('tripVehicle').value,purpose:document.getElementById('tripPurpose').value,savedAt:Date.now()}));
+   } else {
+     localStorage.removeItem(ACTIVE_TRIP_KEY);
+   }
+ }catch(e){}
+}
+
 document.getElementById('addFuelBtn').onclick=()=>{
  if(!trip.running) return;
  const liters=Number(document.getElementById('fuelLiters').value)||0;
@@ -708,61 +937,25 @@ document.getElementById('addFuelBtn').onclick=()=>{
  persist();
 };
 
-document.getElementById('startTrip').onclick=()=>{
- if(!locationConsent || gpsPermission!=='granted')return alert('Please first choose “Allow Location Access” and grant the browser location permission. Tracking will begin only when you press Start Trip.');
- trip={running:true,paused:false,points:[],km:0,movingMs:0,lastMoveAt:Date.now(),fuelLog:[]};
- tripPath=[]; if(tripPolyline)tripPolyline.setPath(tripPath); if(tripMarker){tripMarker.setMap(null);tripMarker=null;}
- document.getElementById('startTrip').disabled=true;document.getElementById('stopTrip').disabled=false;
- document.getElementById('gpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking';document.getElementById('gpsInfo').textContent='Tracking location…';
- document.getElementById('pausedBanner').classList.add('d-none');
- document.getElementById('fuelAddBox').classList.remove('d-none');
- initTripMap(); renderFuelLog();
- requestWakeLock();
- watchId=navigator.geolocation.watchPosition(pos=>{
-   const p={lat:pos.coords.latitude,lon:pos.coords.longitude,acc:pos.coords.accuracy,time:Date.now()};
-   const last=trip.points.at(-1);
-   let speedKmh=0, dt=0;
-   if(last){
-     const d=hav(last,p); dt=(p.time-last.time)/1000; // seconds
-     if(dt>0) speedKmh=(d*1000/dt)*3.6;
-     if(d>0.002 && d<1){ // ignore GPS noise jumps
-       if(speedKmh<PAUSE_SPEED){
-         if(!trip.paused && (Date.now()-trip.lastMoveAt)>PAUSE_AFTER_MS){
-           trip.paused=true;
-           document.getElementById('pausedBanner').classList.remove('d-none');
-           document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> Auto-paused';
-         }
-       } else {
-         trip.lastMoveAt=Date.now();
-         if(trip.paused){ trip.paused=false; document.getElementById('pausedBanner').classList.add('d-none'); document.getElementById('gpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking'; }
-         if(!trip.paused){ trip.km+=d; trip.movingMs+=dt*1000; }
-       }
-     }
-   }
-   trip.points.push(p);
-   mapUpdate(p);
-   const v=vehicle(document.getElementById('tripVehicle').value);
-   const fuel=v?trip.km/Number(v.mileage):0, cost=v?fuel*Number(v.rate):0;
-   document.getElementById('tripKm').textContent=trip.km.toFixed(2);
-   document.getElementById('tripTime').textContent=fmtTime(trip.movingMs);
-   document.getElementById('tripSpeed').textContent=speedKmh.toFixed(1);
-   document.getElementById('tripFuel').textContent=fuel.toFixed(2);
-   document.getElementById('tripCost').textContent=money(cost);
-   document.getElementById('gpsInfo').textContent=`Lat ${p.lat.toFixed(5)} • Lon ${p.lon.toFixed(5)} • ±${Math.round(p.acc)}m`;
- },err=>{document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS error';alert('GPS error: '+err.message);},{enableHighAccuracy:true,maximumAge:3000,timeout:10000});
-};
-document.getElementById('stopTrip').onclick=()=>{
- if(watchId!==null)navigator.geolocation.clearWatch(watchId);watchId=null;
+function finishTrip(reason){
+ if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null;}
  if(!walk.running) releaseWakeLock();
  const v=vehicle(document.getElementById('tripVehicle').value);const fuel=v?trip.km/v.mileage:0,cost=v?fuel*v.rate:0;
  const fuelPurchased=trip.fuelLog.reduce((s,f)=>s+f.cost,0);
- if(trip.km>0){state.trips.push({id:Date.now(),date:new Date().toLocaleString('en-IN'),vehicleId:v?.id,purpose:document.getElementById('tripPurpose').value||'Trip',km:Number(trip.km.toFixed(3)),fuel:Number(fuel.toFixed(3)),cost:Number(cost.toFixed(2)),fuelPurchased:Number(fuelPurchased.toFixed(2)),fuelLog:trip.fuelLog,points:trip.points})}
+ const km=trip.km;
+ if(km>0){state.trips.push({id:Date.now(),date:new Date().toLocaleString('en-IN'),vehicleId:v?.id,purpose:document.getElementById('tripPurpose').value||'Trip',km:Number(km.toFixed(3)),fuel:Number(fuel.toFixed(3)),cost:Number(cost.toFixed(2)),fuelPurchased:Number(fuelPurchased.toFixed(2)),fuelLog:trip.fuelLog,points:trip.points,autoSaved:reason==='idle'})}
  trip.running=false;document.getElementById('startTrip').disabled=false;document.getElementById('stopTrip').disabled=true;document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS idle';
  document.getElementById('pausedBanner').classList.add('d-none'); document.getElementById('fuelAddBox').classList.add('d-none');
+ localStorage.removeItem(ACTIVE_TRIP_KEY);
  persist();renderAll();
- alert(`Trip saved.\nDistance: ${trip.km.toFixed(2)} km\nEst. fuel cost: ${money(cost)} • Fuel purchased: ${money(fuelPurchased)}`);
+ // Keep the watch alive so a future trip can still be auto-detected while permission remains granted.
+ tripStandbyMovingSince=null; tripStandbyLastPoint=null; beginTripWatch();
+ if(km>0){
+   if(reason==='idle') alert(`No movement for 20+ minutes, so this trip was auto-saved to make sure nothing was lost.\nDistance: ${km.toFixed(2)} km\nEst. fuel cost: ${money(cost)} • Fuel purchased: ${money(fuelPurchased)}`);
+   else alert(`Trip saved.\nDistance: ${km.toFixed(2)} km\nEst. fuel cost: ${money(cost)} • Fuel purchased: ${money(fuelPurchased)}`);
+ }
 }
-function renderTrips(){document.getElementById('tripRows').innerHTML=state.trips.slice().reverse().map(t=>`<tr><td>${t.date}</td><td>${vehicle(t.vehicleId)?.name||'-'}</td><td>${t.purpose}</td><td>${(t.km||0).toFixed(2)} km</td><td>${(t.fuel||0).toFixed(2)} L</td><td>${money(t.cost)}</td><td>${money(t.fuelPurchased||0)}</td></tr>`).join('')||'<tr><td colspan=7 class="text-center muted">No trips saved</td></tr>'}
+function renderTrips(){document.getElementById('tripRows').innerHTML=state.trips.slice().reverse().map(t=>`<tr><td>${t.date}${t.autoSaved?' <span class="badge text-bg-warning ms-1" title="Auto-saved after inactivity">auto</span>':t.recovered?' <span class="badge text-bg-info ms-1" title="Recovered after an unexpected close">recovered</span>':''}</td><td>${vehicle(t.vehicleId)?.name||'-'}</td><td>${t.purpose}</td><td>${(t.km||0).toFixed(2)} km</td><td>${(t.fuel||0).toFixed(2)} L</td><td>${money(t.cost)}</td><td>${money(t.fuelPurchased||0)}</td></tr>`).join('')||'<tr><td colspan=7 class="text-center muted">No trips saved</td></tr>'}
 /* ---------- Walking module: its own independent live tracker, map and history (kept fully separate from vehicle GPS Trip) ---------- */
 let walkMap=null, walkMarker=null, walkPolyline=null, walkWatchId=null, walkPath=[];
 let walk={running:false,paused:false,points:[],km:0,steps:0,calories:0,movingMs:0,lastMoveAt:Date.now()};
@@ -770,7 +963,8 @@ function initWalkMap(){
  ensureGoogleMaps(()=>{
    if(walkMap) return;
    const el=document.getElementById('walkMap'); if(!el) return;
-   walkMap=new google.maps.Map(el,{center:{lat:20.5937,lng:78.9629},zoom:5,mapTypeControl:false,streetViewControl:false,fullscreenControl:false,clickableIcons:false});
+   walkMap=new google.maps.Map(el,fullMapOptions());
+   addMapExtras(walkMap);
    walkPolyline=new google.maps.Polyline({path:walkPath,strokeColor:'#198754',strokeWeight:5});
    walkPolyline.setMap(walkMap);
  });
@@ -790,62 +984,118 @@ function walkMapUpdate(p){
 document.getElementById('walkPermissionBtn').onclick=()=>{ locationConsent=true; showLocationHelp(false); requestGPSPermission(); };
 document.getElementById('startWalk').onclick=()=>{
  if(!locationConsent || gpsPermission!=='granted')return alert('Please first choose “Ask Browser for Location Access” and grant the browser location permission. Tracking will begin only when you press Start Walk.');
- walk={running:true,paused:false,points:[],km:0,steps:0,calories:0,movingMs:0,lastMoveAt:Date.now()};
+ startWalkInternal(false);
+};
+document.getElementById('stopWalk').onclick=()=>finishWalk('manual');
+
+let walkStandbyMovingSince=null, walkStandbyLastPoint=null, lastWalkAutosave=0;
+
+function startWalkInternal(auto){
+ walk={running:true,paused:false,points:[],km:0,steps:0,calories:0,movingMs:0,lastMoveAt:Date.now(),idleSince:null};
  walkPath=[]; if(walkPolyline)walkPolyline.setPath(walkPath); if(walkMarker){walkMarker.setMap(null);walkMarker=null;}
+ walkStandbyMovingSince=null; walkStandbyLastPoint=null;
  document.getElementById('startWalk').disabled=true;document.getElementById('stopWalk').disabled=false;
- document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking';document.getElementById('walkGpsInfo').textContent='Tracking location…';
+ document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking';
+ document.getElementById('walkGpsInfo').textContent=auto?'Movement detected — walk started automatically.':'Tracking location…';
  document.getElementById('walkPausedBanner').classList.add('d-none');
  initWalkMap(); requestWakeLock();
- walkWatchId=navigator.geolocation.watchPosition(pos=>{
-   const p={lat:pos.coords.latitude,lon:pos.coords.longitude,acc:pos.coords.accuracy,time:Date.now()};
-   const last=walk.points.at(-1);
-   let speedKmh=0, dt=0;
-   if(last){
-     const d=hav(last,p); dt=(p.time-last.time)/1000;
-     if(dt>0) speedKmh=(d*1000/dt)*3.6;
-     if(d>0.002 && d<1){
-       if(speedKmh<PAUSE_SPEED){
-         if(!walk.paused && (Date.now()-walk.lastMoveAt)>PAUSE_AFTER_MS){
-           walk.paused=true;
-           document.getElementById('walkPausedBanner').classList.remove('d-none');
-           document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot"></span> Auto-paused';
-         }
-       } else {
-         walk.lastMoveAt=Date.now();
-         if(walk.paused){ walk.paused=false; document.getElementById('walkPausedBanner').classList.add('d-none'); document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking'; }
-         if(!walk.paused){
-           walk.km+=d; walk.movingMs+=dt*1000;
-           const w=activeWalker();
-           walk.steps+=Math.round((d*1000)/strideFor(w?.age));
-           if(w?.weight) walk.calories+=metFor(speedKmh)*w.weight*(dt/3600);
-         }
+ beginWalkWatch();
+}
+
+function beginWalkWatch(){
+ if(walkWatchId!==null) return;
+ walkWatchId=navigator.geolocation.watchPosition(walkGpsTick,
+   err=>{document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot"></span> GPS error';console.warn('GPS error:',err.message);},
+   {enableHighAccuracy:true,maximumAge:3000,timeout:10000});
+}
+
+function walkGpsTick(pos){
+ const p={lat:pos.coords.latitude,lon:pos.coords.longitude,acc:pos.coords.accuracy,time:Date.now()};
+ if(!walk.running){ handleWalkStandby(p); return; }
+ const last=walk.points.at(-1);
+ let speedKmh=0, dt=0;
+ if(last){
+   const d=hav(last,p); dt=(p.time-last.time)/1000;
+   if(dt>0) speedKmh=(d*1000/dt)*3.6;
+   if(d>0.002 && d<1){
+     if(speedKmh<PAUSE_SPEED){
+       if(!walk.paused && (Date.now()-walk.lastMoveAt)>PAUSE_AFTER_MS){
+         walk.paused=true; walk.idleSince=Date.now();
+         document.getElementById('walkPausedBanner').classList.remove('d-none');
+         document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot"></span> Auto-paused';
+       }
+     } else {
+       walk.lastMoveAt=Date.now(); walk.idleSince=null;
+       if(walk.paused){ walk.paused=false; document.getElementById('walkPausedBanner').classList.add('d-none'); document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking'; }
+       if(!walk.paused){
+         walk.km+=d; walk.movingMs+=dt*1000;
+         const w=activeWalker();
+         walk.steps+=Math.round((d*1000)/strideFor(w?.age));
+         if(w?.weight) walk.calories+=metFor(speedKmh)*w.weight*(dt/3600);
        }
      }
    }
-   walk.points.push(p);
-   walkMapUpdate(p);
-   document.getElementById('walkKm').textContent=walk.km.toFixed(2);
-   document.getElementById('walkTime').textContent=fmtTime(walk.movingMs);
-   document.getElementById('walkSpeed').textContent=speedKmh.toFixed(1);
-   document.getElementById('walkSteps').textContent=Math.round(walk.steps);
-   document.getElementById('walkCalories').textContent=Math.round(walk.calories);
-   document.getElementById('walkGpsInfo').textContent=`Lat ${p.lat.toFixed(5)} • Lon ${p.lon.toFixed(5)} • ±${Math.round(p.acc)}m`;
- },err=>{document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot"></span> GPS error';alert('GPS error: '+err.message);},{enableHighAccuracy:true,maximumAge:3000,timeout:10000});
-};
-document.getElementById('stopWalk').onclick=()=>{
+ }
+ walk.points.push(p);
+ walkMapUpdate(p);
+ document.getElementById('walkKm').textContent=walk.km.toFixed(2);
+ document.getElementById('walkTime').textContent=fmtTime(walk.movingMs);
+ document.getElementById('walkSpeed').textContent=speedKmh.toFixed(1);
+ document.getElementById('walkSteps').textContent=Math.round(walk.steps);
+ document.getElementById('walkCalories').textContent=Math.round(walk.calories);
+ document.getElementById('walkGpsInfo').textContent=`Lat ${p.lat.toFixed(5)} • Lon ${p.lon.toFixed(5)} • ±${Math.round(p.acc)}m`;
+ // Failsafe: if left paused for too long (forgot to press Stop), auto-save & finish so the walk is never lost.
+ if(walk.paused && walk.idleSince && (Date.now()-walk.idleSince)>AUTO_STOP_IDLE_MS){ finishWalk('idle'); return; }
+ if(Date.now()-lastWalkAutosave>AUTOSAVE_MS){ lastWalkAutosave=Date.now(); autosaveActiveWalk(); }
+}
+
+function handleWalkStandby(p){
+ if(state.settings.autoTrip===false) return;
+ let speedKmh=0;
+ if(walkStandbyLastPoint){
+   const d=hav(walkStandbyLastPoint,p), dt=(p.time-walkStandbyLastPoint.time)/1000;
+   if(dt>0) speedKmh=(d*1000/dt)*3.6;
+ }
+ walkStandbyLastPoint=p;
+ if(speedKmh>=WALK_AUTO_START_SPEED){
+   if(!walkStandbyMovingSince) walkStandbyMovingSince=Date.now();
+   if(Date.now()-walkStandbyMovingSince>=AUTO_START_AFTER_MS){ startWalkInternal(true); }
+ } else {
+   walkStandbyMovingSince=null;
+ }
+}
+
+function autosaveActiveWalk(){
+ try{
+   if(walk.running && walk.km>0){
+     localStorage.setItem(ACTIVE_WALK_KEY,JSON.stringify({walk,walkerId:activeWalker()?.id,note:document.getElementById('walkPurpose').value,savedAt:Date.now()}));
+   } else {
+     localStorage.removeItem(ACTIVE_WALK_KEY);
+   }
+ }catch(e){}
+}
+
+function finishWalk(reason){
  if(walkWatchId!==null)navigator.geolocation.clearWatch(walkWatchId);walkWatchId=null;
  if(!trip.running) releaseWakeLock();
  const w=activeWalker();
- if(walk.km>0){ state.walks=state.walks||[]; state.walks.push({id:Date.now(),date:new Date().toLocaleString('en-IN'),walkerId:w?.id,walkerName:w?.name||'—',note:document.getElementById('walkPurpose').value||'Walk',km:Number(walk.km.toFixed(3)),movingMs:walk.movingMs,steps:Math.round(walk.steps),calories:Math.round(walk.calories),points:walk.points}); }
+ const km=walk.km;
+ if(km>0){ state.walks=state.walks||[]; state.walks.push({id:Date.now(),date:new Date().toLocaleString('en-IN'),walkerId:w?.id,walkerName:w?.name||'—',note:document.getElementById('walkPurpose').value||'Walk',km:Number(km.toFixed(3)),movingMs:walk.movingMs,steps:Math.round(walk.steps),calories:Math.round(walk.calories),points:walk.points,autoSaved:reason==='idle'}); }
  walk.running=false;document.getElementById('startWalk').disabled=false;document.getElementById('stopWalk').disabled=true;document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot"></span> GPS idle';
  document.getElementById('walkPausedBanner').classList.add('d-none');
+ localStorage.removeItem(ACTIVE_WALK_KEY);
  persist();renderWalkHistory();
- alert(`Walk saved.\nDistance: ${walk.km.toFixed(2)} km\nSteps: ${Math.round(walk.steps)} • Calories: ${Math.round(walk.calories)} kcal`);
-};
-function renderWalkHistory(){document.getElementById('walkRows').innerHTML=(state.walks||[]).slice().reverse().map(w=>`<tr><td>${w.date}</td><td>${w.walkerName||'-'}</td><td>${w.note||''}</td><td>${(w.km||0).toFixed(2)} km</td><td>${fmtTime(w.movingMs||0)}</td><td>${w.steps||0}</td><td>${w.calories||0} kcal</td></tr>`).join('')||'<tr><td colspan=7 class="text-center muted">No walks saved</td></tr>'}
+ walkStandbyMovingSince=null; walkStandbyLastPoint=null; beginWalkWatch();
+ if(km>0){
+   if(reason==='idle') alert(`No movement for 20+ minutes, so this walk was auto-saved to make sure nothing was lost.\nDistance: ${km.toFixed(2)} km\nSteps: ${Math.round(walk.steps)} • Calories: ${Math.round(walk.calories)} kcal`);
+   else alert(`Walk saved.\nDistance: ${km.toFixed(2)} km\nSteps: ${Math.round(walk.steps)} • Calories: ${Math.round(walk.calories)} kcal`);
+ }
+}
+function renderWalkHistory(){document.getElementById('walkRows').innerHTML=(state.walks||[]).slice().reverse().map(w=>`<tr><td>${w.date}${w.autoSaved?' <span class="badge text-bg-warning ms-1" title="Auto-saved after inactivity">auto</span>':w.recovered?' <span class="badge text-bg-info ms-1" title="Recovered after an unexpected close">recovered</span>':''}</td><td>${w.walkerName||'-'}</td><td>${w.note||''}</td><td>${(w.km||0).toFixed(2)} km</td><td>${fmtTime(w.movingMs||0)}</td><td>${w.steps||0}</td><td>${w.calories||0} kcal</td></tr>`).join('')||'<tr><td colspan=7 class="text-center muted">No walks saved</td></tr>'}
 function renderReports(){const cats={};state.expenses.forEach(e=>cats[e.cat]=(cats[e.cat]||0)+Number(e.amount));document.getElementById('reportExpense').innerHTML=Object.entries(cats).map(([k,v])=>`<div class="d-flex justify-content-between border-bottom py-2"><span>${k}</span><b>${money(v)}</b></div>`).join('')||'No data';const vs={};state.trips.forEach(t=>{const n=vehicle(t.vehicleId)?.name||'Unknown';vs[n]=(vs[n]||0)+t.km});document.getElementById('reportVehicle').innerHTML=Object.entries(vs).map(([k,v])=>`<div class="d-flex justify-content-between border-bottom py-2"><span>${k}</span><b>${v.toFixed(1)} km</b></div>`).join('')||'No data'}
 function saveSettings(){
  state.settings.rate=Number(document.getElementById('defaultRate').value)||105;
+ state.settings.autoTrip=!!document.getElementById('autoTripToggle').checked;
  const newKey=(document.getElementById('gmapsKey').value||'').trim();
  const keyChanged=newKey!==(state.settings.gmapsKey||'');
  state.settings.gmapsKey=newKey;
