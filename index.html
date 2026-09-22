@@ -6,7 +6,6 @@
 <title>SRD DriveLedger — Expense & GPS Tracker</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
 <style>
 :root{--brand:#0d6efd;--dark:#0b1320;--bg:#f4f7fb}
 body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
@@ -44,6 +43,12 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 .paused-banner{background:#fff7ed;border:1px solid #fdba74;color:#9a3412;border-radius:12px;padding:.6rem .9rem;font-size:.85rem}
 .fuel-log-item{font-size:.82rem;border-bottom:1px dashed #e2e8f0;padding:.3rem 0}
 .hidden-mode{display:none!important}
+.gmap-key-warning{border-radius:12px}
+.cat-row{display:flex;align-items:center;gap:.6rem;padding:.5rem 0;border-bottom:1px solid #eef2f7}
+.cat-row:last-child{border-bottom:0}
+.cat-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.05rem;flex:0 0 38px}
+.cat-bar{height:6px;border-radius:4px;background:#eef2f7;overflow:hidden;margin-top:4px}
+.cat-bar>span{display:block;height:100%;border-radius:4px}
 </style>
 </head>
 <body>
@@ -108,7 +113,10 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
  </div>
  <div class="row g-3 mt-1">
   <div class="col-lg-7"><div class="card p-4"><div class="d-flex justify-content-between"><h5><i class="bi bi-receipt-cutoff me-2"></i>Recent Expenses</h5><button class="btn btn-sm btn-primary" onclick="showView('expenses')">Add expense</button></div><div class="table-responsive mt-3"><table class="table align-middle"><thead><tr><th>Date</th><th>Category</th><th>Note</th><th class="text-end">Amount</th></tr></thead><tbody id="recentExpenses"></tbody></table></div></div></div>
-  <div class="col-lg-5"><div class="card p-4"><h5><i class="bi bi-lightning-charge-fill me-2"></i>Quick Start</h5><div class="d-grid gap-2 mt-3"><button class="btn btn-outline-primary text-start" onclick="showView('trip')"><i class="bi bi-play-circle me-2"></i>Start GPS trip</button><button class="btn btn-outline-primary text-start" onclick="showView('expenses')"><i class="bi bi-plus-circle me-2"></i>Record expense</button><button class="btn btn-outline-primary text-start" onclick="showView('vehicles')"><i class="bi bi-car-front me-2"></i>Add vehicle</button></div><hr><small class="muted">GPS uses your browser/device location permission. Keep this page active during a trip for the most reliable demo tracking.</small></div></div>
+  <div class="col-lg-5"><div class="card p-4"><h5><i class="bi bi-pie-chart-fill me-2"></i>Expenses by Category</h5><div class="muted small mb-2">Auto-calculated from every recorded expense</div><div id="categoryBreakdown"></div><div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top"><b>Total (all categories)</b><b id="categoryTotal" class="fs-5">₹0</b></div></div></div>
+ </div>
+ <div class="row g-3 mt-1">
+  <div class="col-12"><div class="card p-4"><h5><i class="bi bi-lightning-charge-fill me-2"></i>Quick Start</h5><div class="row g-2 mt-1"><div class="col-md-4"><button class="btn btn-outline-primary text-start w-100" onclick="showView('trip')"><i class="bi bi-play-circle me-2"></i>Start GPS trip</button></div><div class="col-md-4"><button class="btn btn-outline-primary text-start w-100" onclick="showView('expenses')"><i class="bi bi-plus-circle me-2"></i>Record expense</button></div><div class="col-md-4"><button class="btn btn-outline-primary text-start w-100" onclick="showView('vehicles')"><i class="bi bi-car-front me-2"></i>Add vehicle</button></div></div><hr><small class="muted">GPS uses your browser/device location permission and Google Maps. Keep this page active during a trip for the most reliable tracking.</small></div></div>
  </div>
 </section>
 
@@ -154,6 +162,7 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
      <button id="walkPermissionBtn" class="btn btn-primary btn-sm"><i class="bi bi-geo-alt-fill"></i> Ask Browser for Location Access</button>
    </div>
  </div>
+ <div class="alert alert-warning gmap-key-warning d-none mt-3 small gmap-key-warning-walk"><i class="bi bi-exclamation-triangle-fill me-1"></i> Add a Google Maps API key in <a href="#" onclick="showView('settings');return false;">Settings</a> to show the live map.</div>
  <div id="walkMap" class="mt-3"></div>
  <div id="walkGpsInfo" class="small muted mt-2">Location permission has not been requested.</div>
  <div class="row text-center mt-3">
@@ -224,6 +233,7 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
     </div>
   </div>
 </div>
+<div class="alert alert-warning gmap-key-warning d-none mt-3 small gmap-key-warning-trip"><i class="bi bi-exclamation-triangle-fill me-1"></i> Add a Google Maps API key in <a href="#" onclick="showView('settings');return false;">Settings</a> to show the live map.</div>
 <div id="tripMap" class="mt-3"></div>
 <div id="gpsInfo" class="small muted mt-2">Location permission has not been requested.</div>
 
@@ -260,7 +270,9 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 
 <section id="reports" class="view"><div class="row g-3"><div class="col-md-6"><div class="card p-4"><h5><i class="bi bi-cash-stack me-2"></i>Expense Summary</h5><div id="reportExpense"></div></div></div><div class="col-md-6"><div class="card p-4"><h5><i class="bi bi-car-front-fill me-2"></i>Vehicle Running Summary</h5><div id="reportVehicle"></div></div></div></div></section>
 
-<section id="settings" class="view"><div class="card p-4"><h5><i class="bi bi-gear-fill me-2"></i>Settings</h5><div class="row g-3 mt-1"><div class="col-md-6"><label class="form-label">Default petrol rate (₹/L)</label><input id="defaultRate" type="number" class="form-control"></div><div class="col-md-6"><label class="form-label">Currency</label><input class="form-control" value="INR (₹)" disabled></div><div class="col-12"><button class="btn btn-primary" onclick="saveSettings()">Save Settings</button></div></div><hr><h6>Google Sheets Production Mode</h6><p class="small muted">Paste your deployed Google Apps Script Web App URL in the backend configuration when moving from Demo Mode.</p></div></section>
+<section id="settings" class="view"><div class="card p-4"><h5><i class="bi bi-gear-fill me-2"></i>Settings</h5><div class="row g-3 mt-1"><div class="col-md-6"><label class="form-label">Default petrol rate (₹/L)</label><input id="defaultRate" type="number" class="form-control"></div><div class="col-md-6"><label class="form-label">Currency</label><input class="form-control" value="INR (₹)" disabled></div>
+<div class="col-12"><label class="form-label">Google Maps API Key</label><input id="gmapsKey" class="form-control" placeholder="Paste your Google Maps JavaScript API key"><div class="small muted mt-1">Required for the live GPS map (GPS Trip &amp; Walking Profile). Create a key in Google Cloud Console with the <b>Maps JavaScript API</b> enabled, then paste it here. The key is stored only in this browser.</div></div>
+<div class="col-12"><button class="btn btn-primary" onclick="saveSettings()">Save Settings</button></div></div><hr><h6>Google Sheets Production Mode</h6><p class="small muted">Paste your deployed Google Apps Script Web App URL in the backend configuration when moving from Demo Mode.</p></div></section>
 
 <section id="admin" class="view"><div class="card p-4"><div class="d-flex justify-content-between"><div><h5><i class="bi bi-shield-lock-fill me-2"></i>Master Admin Console</h5><div class="muted small">Subscriber authentication and plan control</div></div><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#userModal"><i class="bi bi-person-plus"></i> Create Subscriber</button></div>
 <div class="table-responsive mt-3"><table class="table align-middle"><thead><tr><th>Business</th><th>Username</th><th>Plan</th><th>Expiry</th><th>Status</th><th></th></tr></thead><tbody id="userRows"></tbody></table></div>
@@ -279,11 +291,10 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 <div class="modal fade" id="userModal"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5>Create Subscriber</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input id="uBusiness" class="form-control mb-2" placeholder="Business name"><input id="uName" class="form-control mb-2" placeholder="Username"><input id="uPass" class="form-control mb-2" placeholder="Temporary password"><select id="uPlan" class="form-select mb-2"><option>Starter</option><option>Professional</option><option>Enterprise</option></select><select id="uStatus" class="form-select"><option>Active</option><option>Pending</option></select></div><div class="modal-footer"><button class="btn btn-primary" onclick="addUser()">Create</button></div></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const KEY='srd_driveledger_demo_v1';
 const DEMO_DEFAULTS={
- settings:{rate:105},
+ settings:{rate:105,gmapsKey:''},
  vehicles:[
   {id:1,name:'MH-31 AB 1234',type:'Two Wheeler',fuel:'Petrol',mileage:45,rate:105,active:true},
   {id:2,name:'MH-31 XY 5678',type:'Three Wheeler',fuel:'CNG',mileage:28,rate:92,active:true}
@@ -393,14 +404,34 @@ function showView(id){
  const titles={dashboard:'Dashboard',expenses:'Daily Expenses',vehicles:'Vehicle Master',walking:'Walking Profile',trip:'GPS Trip',trips:'Trip History',reports:'Reports',settings:'Settings',admin:'Master Admin Console'};
  document.getElementById('pageTitle').textContent=titles[id]||id;
  if(id==='reports')renderReports();
- if(id==='trip'){initTripMap();setTimeout(()=>{if(tripMap)tripMap.invalidateSize()},150);}
- if(id==='walking'){initWalkMap();setTimeout(()=>{if(walkMap)walkMap.invalidateSize()},150);}
+ if(id==='trip'){initTripMap();setTimeout(()=>{if(tripMap&&window.google)google.maps.event.trigger(tripMap,'resize')},150);}
+ if(id==='walking'){initWalkMap();setTimeout(()=>{if(walkMap&&window.google)google.maps.event.trigger(walkMap,'resize')},150);}
 }
-function renderAll(){renderDashboard();renderExpenses();renderVehicles();renderWalkers();renderSelects();renderTrips();renderWalkHistory();renderUsers();document.getElementById('defaultRate').value=state.settings.rate}
+function renderAll(){renderDashboard();renderExpenses();renderVehicles();renderWalkers();renderSelects();renderTrips();renderWalkHistory();renderUsers();document.getElementById('defaultRate').value=state.settings.rate;const gk=document.getElementById('gmapsKey');if(gk)gk.value=state.settings.gmapsKey||''}
+const CATEGORY_META={
+ Fuel:{icon:'bi-fuel-pump-fill',color:'#0d6efd'},
+ Food:{icon:'bi-cup-hot-fill',color:'#fd7e14'},
+ Repair:{icon:'bi-tools',color:'#dc3545'},
+ Toll:{icon:'bi-signpost-split-fill',color:'#6f42c1'},
+ Parking:{icon:'bi-p-square-fill',color:'#198754'},
+ Other:{icon:'bi-three-dots',color:'#64748b'}
+};
 function renderDashboard(){
  const total=state.expenses.reduce((s,e)=>s+Number(e.amount),0), dist=state.trips.reduce((s,t)=>s+t.km,0), fuel=state.trips.reduce((s,t)=>s+t.fuel,0), cost=state.trips.reduce((s,t)=>s+t.cost,0);
  document.getElementById('mExpense').textContent=money(total);document.getElementById('mDistance').textContent=dist.toFixed(1)+' km';document.getElementById('mFuel').textContent=money(cost);document.getElementById('mVehicle').textContent=(state.vehicles.find(v=>v.active)||state.vehicles[0])?.name||'—';
  document.getElementById('recentExpenses').innerHTML=state.expenses.slice(-6).reverse().map(e=>`<tr><td>${e.date}</td><td>${e.cat}</td><td>${e.note||''}</td><td class="text-end">${money(e.amount)}</td></tr>`).join('')||'<tr><td colspan=4 class="text-center muted">No expenses</td></tr>';
+ /* Every expense, automatically summed and grouped by category */
+ const catTotals={};
+ state.expenses.forEach(e=>{const c=e.cat||'Other';catTotals[c]=(catTotals[c]||0)+Number(e.amount||0)});
+ const grand=Object.values(catTotals).reduce((s,v)=>s+v,0);
+ const cats=Object.keys(catTotals).sort((a,b)=>catTotals[b]-catTotals[a]);
+ document.getElementById('categoryBreakdown').innerHTML=cats.length?cats.map(c=>{
+   const meta=CATEGORY_META[c]||CATEGORY_META.Other;
+   const amt=catTotals[c];
+   const pct=grand>0?Math.round((amt/grand)*100):0;
+   return `<div class="cat-row"><div class="cat-icon" style="background:${meta.color}1a;color:${meta.color}"><i class="bi ${meta.icon}"></i></div><div class="flex-fill"><div class="d-flex justify-content-between"><span>${c}</span><b>${money(amt)}</b></div><div class="cat-bar"><span style="width:${pct}%;background:${meta.color}"></span></div></div></div>`;
+ }).join(''):'<div class="muted small">No expenses recorded yet.</div>';
+ document.getElementById('categoryTotal').textContent=money(grand);
 }
 function renderExpenses(){
  const q=(document.getElementById('expenseSearch')?.value||'').toLowerCase(),f=document.getElementById('expenseFilter')?.value||'';
@@ -582,21 +613,76 @@ function metFor(speedKmh){ // rough MET table for walking pace
  return 7.0; // brisk/jog while still classified as "walking"
 }
 
-let tripMap=null, tripMarker=null, tripPolyline=null, wakeLock=null;
+/* ---------- Google Maps loader (shared by GPS Trip and Walking Profile maps) ---------- */
+let gmapsLoaded=false, gmapsLoading=false, gmapsCallbacks=[];
+function ensureGoogleMaps(cb){
+ if(gmapsLoaded && window.google && window.google.maps){cb();return;}
+ gmapsCallbacks.push(cb);
+ if(gmapsLoading)return;
+ const key=(state.settings.gmapsKey||'').trim();
+ if(!key){ document.querySelectorAll('.gmap-key-warning').forEach(x=>x.classList.remove('d-none')); return; }
+ gmapsLoading=true;
+ window.__gmapsReady=function(){
+   gmapsLoaded=true; gmapsLoading=false;
+   document.querySelectorAll('.gmap-key-warning').forEach(x=>x.classList.add('d-none'));
+   gmapsCallbacks.forEach(f=>{try{f()}catch(e){console.error(e)}});
+   gmapsCallbacks=[];
+ };
+ const s=document.createElement('script');
+ s.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=__gmapsReady`;
+ s.async=true; s.defer=true;
+ s.onerror=()=>{ gmapsLoading=false; alert('Google Maps failed to load. Check the API key in Settings and that the Maps JavaScript API is enabled for it.'); };
+ document.head.appendChild(s);
+}
+/* ---------- Vehicle / walker marker icons: a distinct icon per vehicle type, shown on the live map ---------- */
+const VEHICLE_ICON_MAP={
+ 'Two Wheeler':{emoji:'🏍️',color:'#0d6efd'},
+ 'Three Wheeler':{emoji:'🛺',color:'#fd7e14'},
+ 'Car':{emoji:'🚗',color:'#198754'},
+ 'Pickup':{emoji:'🛻',color:'#6f42c1'},
+ 'Truck':{emoji:'🚚',color:'#dc3545'},
+ 'Bus':{emoji:'🚌',color:'#20c997'},
+ 'Other':{emoji:'📍',color:'#495057'}
+};
+const WALK_ICON={emoji:'🚶',color:'#198754'};
+function emojiMarkerSVG(emoji,bg){
+ return `<svg xmlns="http://www.w3.org/2000/svg" width="46" height="46" viewBox="0 0 46 46">`+
+   `<circle cx="23" cy="23" r="20" fill="${bg}" stroke="#ffffff" stroke-width="3"/>`+
+   `<text x="23" y="30" font-size="20" text-anchor="middle" font-family="Segoe UI Emoji, Apple Color Emoji, sans-serif">${emoji}</text>`+
+   `</svg>`;
+}
+function markerIconFor(cfg){
+ const svg=emojiMarkerSVG(cfg.emoji,cfg.color);
+ return {url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg),scaledSize:new google.maps.Size(46,46),anchor:new google.maps.Point(23,23)};
+}
+function currentTripVehicleIcon(){
+ const v=vehicle(document.getElementById('tripVehicle').value);
+ const cfg=VEHICLE_ICON_MAP[v?.type]||VEHICLE_ICON_MAP.Other;
+ return markerIconFor(cfg);
+}
+
+let tripMap=null, tripMarker=null, tripPolyline=null, tripPath=[], wakeLock=null;
 function initTripMap(){
- if(tripMap) return;
- const el=document.getElementById('tripMap'); if(!el) return;
- tripMap=L.map(el).setView([20.5937,78.9629],5);
- L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(tripMap);
- tripPolyline=L.polyline([],{color:'#0d6efd',weight:5}).addTo(tripMap);
+ ensureGoogleMaps(()=>{
+   if(tripMap) return;
+   const el=document.getElementById('tripMap'); if(!el) return;
+   tripMap=new google.maps.Map(el,{center:{lat:20.5937,lng:78.9629},zoom:5,mapTypeControl:false,streetViewControl:false,fullscreenControl:false,clickableIcons:false});
+   tripPolyline=new google.maps.Polyline({path:tripPath,strokeColor:'#0d6efd',strokeWeight:5});
+   tripPolyline.setMap(tripMap);
+ });
 }
 function mapUpdate(p){
- if(!tripMap) initTripMap();
- const ll=[p.lat,p.lon];
- if(!tripMarker){ tripMarker=L.marker(ll).addTo(tripMap); tripMap.setView(ll,17); }
- else tripMarker.setLatLng(ll);
- tripPolyline.addLatLng(ll);
- tripMap.panTo(ll,{animate:true});
+ ensureGoogleMaps(()=>{
+   if(!tripMap) initTripMap();
+   if(!tripMap) return;
+   const ll={lat:p.lat,lng:p.lon};
+   const icon=currentTripVehicleIcon();
+   if(!tripMarker){ tripMarker=new google.maps.Marker({position:ll,map:tripMap,icon}); tripMap.setCenter(ll); tripMap.setZoom(17); }
+   else { tripMarker.setPosition(ll); tripMarker.setIcon(icon); }
+   tripPath.push(ll);
+   tripPolyline.setPath(tripPath);
+   tripMap.panTo(ll);
+ });
 }
 async function requestWakeLock(){ try{ if('wakeLock' in navigator) wakeLock=await navigator.wakeLock.request('screen'); }catch(e){} }
 function releaseWakeLock(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch(e){} }
@@ -625,6 +711,7 @@ document.getElementById('addFuelBtn').onclick=()=>{
 document.getElementById('startTrip').onclick=()=>{
  if(!locationConsent || gpsPermission!=='granted')return alert('Please first choose “Allow Location Access” and grant the browser location permission. Tracking will begin only when you press Start Trip.');
  trip={running:true,paused:false,points:[],km:0,movingMs:0,lastMoveAt:Date.now(),fuelLog:[]};
+ tripPath=[]; if(tripPolyline)tripPolyline.setPath(tripPath); if(tripMarker){tripMarker.setMap(null);tripMarker=null;}
  document.getElementById('startTrip').disabled=true;document.getElementById('stopTrip').disabled=false;
  document.getElementById('gpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking';document.getElementById('gpsInfo').textContent='Tracking location…';
  document.getElementById('pausedBanner').classList.add('d-none');
@@ -677,27 +764,34 @@ document.getElementById('stopTrip').onclick=()=>{
 }
 function renderTrips(){document.getElementById('tripRows').innerHTML=state.trips.slice().reverse().map(t=>`<tr><td>${t.date}</td><td>${vehicle(t.vehicleId)?.name||'-'}</td><td>${t.purpose}</td><td>${(t.km||0).toFixed(2)} km</td><td>${(t.fuel||0).toFixed(2)} L</td><td>${money(t.cost)}</td><td>${money(t.fuelPurchased||0)}</td></tr>`).join('')||'<tr><td colspan=7 class="text-center muted">No trips saved</td></tr>'}
 /* ---------- Walking module: its own independent live tracker, map and history (kept fully separate from vehicle GPS Trip) ---------- */
-let walkMap=null, walkMarker=null, walkPolyline=null, walkWatchId=null;
+let walkMap=null, walkMarker=null, walkPolyline=null, walkWatchId=null, walkPath=[];
 let walk={running:false,paused:false,points:[],km:0,steps:0,calories:0,movingMs:0,lastMoveAt:Date.now()};
 function initWalkMap(){
- if(walkMap) return;
- const el=document.getElementById('walkMap'); if(!el) return;
- walkMap=L.map(el).setView([20.5937,78.9629],5);
- L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(walkMap);
- walkPolyline=L.polyline([],{color:'#198754',weight:5}).addTo(walkMap);
+ ensureGoogleMaps(()=>{
+   if(walkMap) return;
+   const el=document.getElementById('walkMap'); if(!el) return;
+   walkMap=new google.maps.Map(el,{center:{lat:20.5937,lng:78.9629},zoom:5,mapTypeControl:false,streetViewControl:false,fullscreenControl:false,clickableIcons:false});
+   walkPolyline=new google.maps.Polyline({path:walkPath,strokeColor:'#198754',strokeWeight:5});
+   walkPolyline.setMap(walkMap);
+ });
 }
 function walkMapUpdate(p){
- if(!walkMap) initWalkMap();
- const ll=[p.lat,p.lon];
- if(!walkMarker){ walkMarker=L.marker(ll).addTo(walkMap); walkMap.setView(ll,17); }
- else walkMarker.setLatLng(ll);
- walkPolyline.addLatLng(ll);
- walkMap.panTo(ll,{animate:true});
+ ensureGoogleMaps(()=>{
+   if(!walkMap) initWalkMap();
+   if(!walkMap) return;
+   const ll={lat:p.lat,lng:p.lon};
+   if(!walkMarker){ walkMarker=new google.maps.Marker({position:ll,map:walkMap,icon:markerIconFor(WALK_ICON)}); walkMap.setCenter(ll); walkMap.setZoom(17); }
+   else walkMarker.setPosition(ll);
+   walkPath.push(ll);
+   walkPolyline.setPath(walkPath);
+   walkMap.panTo(ll);
+ });
 }
 document.getElementById('walkPermissionBtn').onclick=()=>{ locationConsent=true; showLocationHelp(false); requestGPSPermission(); };
 document.getElementById('startWalk').onclick=()=>{
  if(!locationConsent || gpsPermission!=='granted')return alert('Please first choose “Ask Browser for Location Access” and grant the browser location permission. Tracking will begin only when you press Start Walk.');
  walk={running:true,paused:false,points:[],km:0,steps:0,calories:0,movingMs:0,lastMoveAt:Date.now()};
+ walkPath=[]; if(walkPolyline)walkPolyline.setPath(walkPath); if(walkMarker){walkMarker.setMap(null);walkMarker=null;}
  document.getElementById('startWalk').disabled=true;document.getElementById('stopWalk').disabled=false;
  document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking';document.getElementById('walkGpsInfo').textContent='Tracking location…';
  document.getElementById('walkPausedBanner').classList.add('d-none');
@@ -750,7 +844,15 @@ document.getElementById('stopWalk').onclick=()=>{
 };
 function renderWalkHistory(){document.getElementById('walkRows').innerHTML=(state.walks||[]).slice().reverse().map(w=>`<tr><td>${w.date}</td><td>${w.walkerName||'-'}</td><td>${w.note||''}</td><td>${(w.km||0).toFixed(2)} km</td><td>${fmtTime(w.movingMs||0)}</td><td>${w.steps||0}</td><td>${w.calories||0} kcal</td></tr>`).join('')||'<tr><td colspan=7 class="text-center muted">No walks saved</td></tr>'}
 function renderReports(){const cats={};state.expenses.forEach(e=>cats[e.cat]=(cats[e.cat]||0)+Number(e.amount));document.getElementById('reportExpense').innerHTML=Object.entries(cats).map(([k,v])=>`<div class="d-flex justify-content-between border-bottom py-2"><span>${k}</span><b>${money(v)}</b></div>`).join('')||'No data';const vs={};state.trips.forEach(t=>{const n=vehicle(t.vehicleId)?.name||'Unknown';vs[n]=(vs[n]||0)+t.km});document.getElementById('reportVehicle').innerHTML=Object.entries(vs).map(([k,v])=>`<div class="d-flex justify-content-between border-bottom py-2"><span>${k}</span><b>${v.toFixed(1)} km</b></div>`).join('')||'No data'}
-function saveSettings(){state.settings.rate=Number(document.getElementById('defaultRate').value)||105;persist();alert('Settings saved.')}
+function saveSettings(){
+ state.settings.rate=Number(document.getElementById('defaultRate').value)||105;
+ const newKey=(document.getElementById('gmapsKey').value||'').trim();
+ const keyChanged=newKey!==(state.settings.gmapsKey||'');
+ state.settings.gmapsKey=newKey;
+ persist();
+ if(keyChanged && newKey && !gmapsLoaded){ ensureGoogleMaps(()=>{}); document.querySelectorAll('.gmap-key-warning').forEach(x=>x.classList.add('d-none')); }
+ alert(keyChanged?'Settings saved. If the map does not appear, refresh the page once.':'Settings saved.');
+}
 function renderUsers(){if(currentUser!=='admin')return;document.getElementById('userRows').innerHTML=state.users.map((u,i)=>`<tr><td>${u.business}</td><td>${u.username}</td><td>${u.plan}</td><td>${u.expiry}</td><td><span class="badge ${u.status==='Active'?'text-bg-success':'text-bg-warning'}">${u.status}</span></td><td><button class="btn btn-sm btn-outline-secondary" onclick="toggleUser(${i})">Toggle</button></td></tr>`).join('')}
 function addUser(){const u={business:document.getElementById('uBusiness').value,username:document.getElementById('uName').value,plan:document.getElementById('uPlan').value,expiry:new Date(Date.now()+30*864e5).toISOString().slice(0,10),status:document.getElementById('uStatus').value};if(!u.business||!u.username)return alert('Enter business and username.');state.users.push(u);persist();bootstrap.Modal.getInstance(document.getElementById('userModal')).hide();document.getElementById('uBusiness').value='';document.getElementById('uName').value='';document.getElementById('uPass').value='';renderUsers();alert('Subscriber created. In production, credentials should be generated/stored by the Apps Script backend.')}
 function toggleUser(i){state.users[i].status=state.users[i].status==='Active'?'Pending':'Active';persist();renderUsers()}
