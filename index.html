@@ -26,13 +26,26 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
   body.sidebar-open{overflow:hidden}
 }
 @media(min-width:992px){
+  .sidebar{position:fixed;top:0;left:0;height:100vh;width:270px;z-index:1030;overflow-y:auto}
+  main{margin-left:270px;width:calc(100% - 270px);max-width:calc(100% - 270px);flex:0 0 calc(100% - 270px)}
   body.sidebar-collapsed .sidebar{flex:0 0 84px;max-width:84px;width:84px}
-  body.sidebar-collapsed main{flex:0 0 calc(100% - 84px);max-width:calc(100% - 84px)}
+  body.sidebar-collapsed main{margin-left:84px;flex:0 0 calc(100% - 84px);max-width:calc(100% - 84px);width:calc(100% - 84px)}
   body.sidebar-collapsed .nav-label,body.sidebar-collapsed .brand-text,body.sidebar-collapsed .workspace-label,body.sidebar-collapsed #logoutBtn .btn-label{display:none}
   body.sidebar-collapsed .sidebar .nav-link{justify-content:center}
   body.sidebar-collapsed .sidebar .nav-link i{margin-right:0!important}
   body.sidebar-collapsed #sidebarClose{display:none}
 }
+.app-header{position:sticky;top:0;z-index:1020;background:var(--bg);padding-top:.85rem;padding-bottom:.85rem;border-bottom:1px solid #e2e8f0}
+.meter-modal-content{background:linear-gradient(160deg,#0f172a,#1e293b);color:#e2e8f0;border-radius:22px;border:1px solid rgba(255,255,255,.08);box-shadow:0 0 50px rgba(13,110,253,.28)}
+.gauge-svg{width:100%;max-width:260px;height:auto;margin:0 auto;display:block}
+.meter-digital{font-family:'Courier New',monospace;font-size:2.5rem;font-weight:800;letter-spacing:2px;margin-top:-14px;transition:color .2s}
+.meter-unit{font-size:.9rem;margin-left:6px;opacity:.65;font-weight:600}
+.meter-leds{display:flex;justify-content:center;gap:4px;margin-top:6px;flex-wrap:wrap}
+.meter-led{width:8px;height:14px;border-radius:2px;background:#1e293b}
+.meter-led.on{box-shadow:0 0 9px currentColor}
+.meter-stat-label{font-size:.68rem;opacity:.6;text-transform:uppercase;letter-spacing:.6px}
+.meter-stat-val{font-weight:700;font-size:1.05rem}
+.meter-stats{background:rgba(255,255,255,.04);border-radius:14px;padding:.6rem .3rem}
 .mapbox{height:260px;border-radius:16px;background:repeating-linear-gradient(45deg,#eef2f7,#eef2f7 10px,#e7edf5 10px,#e7edf5 20px);display:flex;align-items:center;justify-content:center;color:#64748b}
 #tripMap,#walkMap{height:320px;border-radius:16px;z-index:0}
 .footer{font-size:.8rem;color:#94a3b8}
@@ -96,7 +109,7 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 <div id="sidebarBackdrop" class="sidebar-backdrop d-lg-none"></div>
 
 <main class="col-lg-10 p-3 p-md-4">
-<header class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+<header class="app-header d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
   <div class="d-flex align-items-center gap-2">
     <button id="sidebarToggle" class="btn btn-light" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="sidebar" title="Toggle menu"><i class="bi bi-list fs-5"></i></button>
     <div><h3 id="pageTitle" class="mb-1">Dashboard</h3><div class="muted small" id="welcome"></div></div>
@@ -155,12 +168,12 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
      <i class="bi bi-shield-check fs-3"></i>
      <div>
        <b>Location Tracking Permission</b>
-       <div class="small mt-1">Used only to calculate walking distance, steps and calories for this walk.</div>
+       <div class="small mt-1">Your browser will show the location prompt the moment you press “Start Walk” below.</div>
        <div class="mt-2"><span class="badge text-bg-secondary" id="walkPermissionState">Not Requested</span></div>
      </div>
    </div>
    <div class="d-flex flex-wrap gap-2 mt-3">
-     <button id="walkPermissionBtn" class="btn btn-primary btn-sm"><i class="bi bi-geo-alt-fill"></i> Ask Browser for Location Access</button>
+     <button id="walkPermissionBtn" class="btn btn-outline-primary btn-sm"><i class="bi bi-geo-alt-fill"></i> Grant Location Access Now (optional)</button>
    </div>
  </div>
  <div class="alert alert-warning gmap-key-warning d-none mt-3 small gmap-key-warning-walk"><i class="bi bi-exclamation-triangle-fill me-1"></i> Add a Google Maps API key in <a href="#" onclick="showView('settings');return false;">Settings</a> to show the live map.</div>
@@ -175,7 +188,11 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
   <div class="col-6"><div class="metric" id="walkSteps">0</div><small class="muted">Steps</small></div>
   <div class="col-6"><div class="metric" id="walkCalories">0</div><small class="muted">Calories (kcal)</small></div>
  </div>
- <div class="d-flex gap-2 mt-4"><button id="startWalk" class="btn btn-success flex-fill" disabled><i class="bi bi-play-fill"></i> Start Walk</button><button id="stopWalk" class="btn btn-danger flex-fill" disabled><i class="bi bi-stop-fill"></i> Stop & Save</button></div>
+ <div class="d-flex gap-2 mt-4">
+  <button id="startWalk" class="btn btn-success flex-fill"><i class="bi bi-play-fill"></i> Start Walk</button>
+  <button id="walkPauseBtn" class="btn btn-warning flex-fill" disabled><i class="bi bi-pause-fill"></i> Pause</button>
+  <button id="stopWalk" class="btn btn-danger flex-fill" disabled><i class="bi bi-stop-fill"></i> Stop &amp; Save</button>
+ </div>
 </div>
 </div>
 </div>
@@ -203,13 +220,12 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
         SRD DriveLedger will ask your browser for location access to calculate the distance travelled,
         vehicle mileage and estimated fuel cost for this trip.
       </div>
-      <div class="small mt-2"><b>Your browser decides whether to show the permission prompt. Your location will NOT be tracked or recorded for a trip until you grant permission and press “Start Trip”.</b></div>
+      <div class="small mt-2"><b>Your browser will show the location prompt the moment you press “Start Trip” below — nothing is tracked before that.</b></div>
       <div class="mt-2"><span class="badge text-bg-secondary" id="permissionState">Not Requested</span></div>
     </div>
   </div>
   <div class="d-flex flex-wrap gap-2 mt-3">
-    <button id="permissionBtn" class="btn btn-primary"><i class="bi bi-geo-alt-fill"></i> Ask Browser for Location Access</button>
-    <button id="notNowBtn" class="btn btn-outline-secondary">Not Now</button>
+    <button id="permissionBtn" class="btn btn-outline-primary btn-sm"><i class="bi bi-geo-alt-fill"></i> Grant Location Access Now (optional)</button>
     <button id="retryLocationBtn" class="btn btn-outline-primary d-none"><i class="bi bi-arrow-repeat"></i> Check Again</button>
   </div>
   <div id="browserAskStatus" class="small border rounded p-2 mt-3 bg-white">
@@ -259,7 +275,11 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
  <div id="fuelLogList" class="mt-2"></div>
 </div>
 
-<div class="d-flex gap-2 mt-4"><button id="startTrip" class="btn btn-success flex-fill" disabled><i class="bi bi-play-fill"></i> Start Trip</button><button id="stopTrip" class="btn btn-danger flex-fill" disabled><i class="bi bi-stop-fill"></i> Stop & Save</button></div>
+<div class="d-flex gap-2 mt-4">
+ <button id="startTrip" class="btn btn-success flex-fill"><i class="bi bi-play-fill"></i> Start Trip</button>
+ <button id="tripPauseBtn" class="btn btn-warning flex-fill" disabled><i class="bi bi-pause-fill"></i> Pause</button>
+ <button id="stopTrip" class="btn btn-danger flex-fill" disabled><i class="bi bi-stop-fill"></i> Stop &amp; Save</button>
+</div>
 </div></div>
 <div class="col-lg-5"><div class="card p-4"><h5><i class="bi bi-info-circle me-2"></i>How it works</h5><ol class="small mt-3"><li>Choose your vehicle.</li><li>Allow browser location permission once.</li><li>Press Start Trip — the app accumulates GPS distance automatically.</li><li>If you stop moving, tracking auto-pauses; it resumes by itself the moment you move again.</li><li>You can log fuel top-ups mid-trip and the totals update instantly.</li><li>Stop to save the trip with its distance and fuel cost breakdown.</li></ol>
 <div class="alert alert-warning small mb-2">Browser GPS accuracy varies from device to device.</div>
@@ -272,7 +292,19 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 <section id="reports" class="view"><div class="row g-3"><div class="col-md-6"><div class="card p-4"><h5><i class="bi bi-cash-stack me-2"></i>Expense Summary</h5><div id="reportExpense"></div></div></div><div class="col-md-6"><div class="card p-4"><h5><i class="bi bi-car-front-fill me-2"></i>Vehicle Running Summary</h5><div id="reportVehicle"></div></div></div></div></section>
 
 <section id="settings" class="view"><div class="card p-4"><h5><i class="bi bi-gear-fill me-2"></i>Settings</h5><div class="row g-3 mt-1"><div class="col-md-6"><label class="form-label">Default petrol rate (₹/L)</label><input id="defaultRate" type="number" class="form-control"></div><div class="col-md-6"><label class="form-label">Currency</label><input class="form-control" value="INR (₹)" disabled></div>
-<div class="col-12"><label class="form-label">Google Maps API Key</label><input id="gmapsKey" class="form-control" placeholder="Paste your Google Maps JavaScript API key"><div class="small muted mt-1">Required for the live GPS map (GPS Trip &amp; Walking Profile). Create a key in Google Cloud Console with the <b>Maps JavaScript API</b> and <b>Places API</b> enabled, then paste it here. The key is stored only in this browser.</div></div>
+<div class="col-12"><label class="form-label">Google Maps API Key</label><input id="gmapsKey" class="form-control" placeholder="Paste your Google Maps JavaScript API key">
+<button type="button" class="btn btn-outline-secondary btn-sm mt-2" onclick="testMapsKey()"><i class="bi bi-check2-circle"></i> Test this key</button>
+<div id="gmapsKeyTestResult" class="small mt-2"></div>
+<div class="small muted mt-2">
+ If the map stays blank after saving a key, it's almost always one of these — all fixed in <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a>:
+ <ol class="mt-1 mb-0 ps-3">
+  <li><b>Billing not enabled</b> on the project (required even for the free monthly credit).</li>
+  <li><b>Maps JavaScript API</b> and <b>Places API</b> not enabled for the project.</li>
+  <li>The key has an <b>HTTP-referrer restriction</b> that doesn't include this page's address — if you're testing by double-clicking the file (a <code>file://</code> address) or from a new hosting domain, either remove the restriction while testing or add that exact address to the allowed list.</li>
+  <li>A typo or extra space pasted into the key field.</li>
+ </ol>
+</div>
+</div>
 <div class="col-12">
  <div class="form-check form-switch">
    <input class="form-check-input" type="checkbox" id="autoTripToggle" checked>
@@ -297,6 +329,36 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 <div class="modal fade" id="walkerModal"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5>Add Walking Profile</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="form-label">Name</label><input id="wName" class="form-control mb-2" placeholder="Name"><label class="form-label">Age</label><input id="wAge" type="number" min="1" max="120" class="form-control mb-2" placeholder="Age (years)"><label class="form-label">Weight</label><input id="wWeight" type="number" min="1" step="0.1" class="form-control" placeholder="Weight (kg)"></div><div class="modal-footer"><button class="btn btn-primary" onclick="addWalker()">Save Profile</button></div></div></div></div>
 <!-- User Modal -->
 <div class="modal fade" id="userModal"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5>Create Subscriber</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input id="uBusiness" class="form-control mb-2" placeholder="Business name"><input id="uName" class="form-control mb-2" placeholder="Username"><input id="uPass" class="form-control mb-2" placeholder="Temporary password"><select id="uPlan" class="form-select mb-2"><option>Starter</option><option>Professional</option><option>Enterprise</option></select><select id="uStatus" class="form-select"><option>Active</option><option>Pending</option></select></div><div class="modal-footer"><button class="btn btn-primary" onclick="addUser()">Create</button></div></div></div></div>
+
+<!-- Live Meter Modal: digital + analog speedometer shown on Start / Pause / Resume -->
+<div class="modal fade" id="liveMeterModal" tabindex="-1" data-bs-backdrop="static">
+ <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-content meter-modal-content">
+   <div class="modal-header border-0 pb-0">
+    <h5 class="modal-title mb-0" id="meterTitle"><i class="bi bi-speedometer2 me-2"></i>Live Meter</h5>
+    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+   </div>
+   <div class="modal-body text-center pt-2">
+    <span id="meterStatusBadge" class="badge text-bg-success mb-2">Tracking</span>
+    <svg id="meterGaugeSvg" viewBox="0 0 200 128" class="gauge-svg"></svg>
+    <div id="meterDigital" class="meter-digital">0<span class="meter-unit">km/h</span></div>
+    <div id="meterLeds" class="meter-leds"></div>
+    <div class="row g-2 mt-3 meter-stats mx-0">
+     <div class="col-4"><div class="meter-stat-label">Distance</div><div class="meter-stat-val" id="meterDistance">0.00 km</div></div>
+     <div class="col-4"><div class="meter-stat-label">Time</div><div class="meter-stat-val" id="meterTime">00:00</div></div>
+     <div class="col-4"><div class="meter-stat-label">Avg Speed</div><div class="meter-stat-val" id="meterAvg">0.0 km/h</div></div>
+     <div class="col-4"><div class="meter-stat-label" id="meterLabel4">Mileage</div><div class="meter-stat-val" id="meterVal4">--</div></div>
+     <div class="col-4"><div class="meter-stat-label">Max Speed</div><div class="meter-stat-val" id="meterMax">0.0 km/h</div></div>
+     <div class="col-4"><div class="meter-stat-label" id="meterLabel6">Fuel Cost</div><div class="meter-stat-val" id="meterVal6">--</div></div>
+    </div>
+   </div>
+   <div class="modal-footer border-0 justify-content-center gap-2 pt-0">
+    <button class="btn btn-warning" id="meterPauseBtn" onclick="toggleMeterPause()"><i class="bi bi-pause-fill"></i> Pause</button>
+    <button class="btn btn-danger" id="meterStopBtn" onclick="stopFromMeter()"><i class="bi bi-stop-fill"></i> Stop &amp; Save</button>
+   </div>
+  </div>
+ </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
@@ -412,8 +474,8 @@ function showView(id){
  const titles={dashboard:'Dashboard',expenses:'Daily Expenses',vehicles:'Vehicle Master',walking:'Walking Profile',trip:'GPS Trip',trips:'Trip History',reports:'Reports',settings:'Settings',admin:'Master Admin Console'};
  document.getElementById('pageTitle').textContent=titles[id]||id;
  if(id==='reports')renderReports();
- if(id==='trip'){initTripMap();setTimeout(()=>{if(tripMap&&window.google)google.maps.event.trigger(tripMap,'resize')},150);}
- if(id==='walking'){initWalkMap();setTimeout(()=>{if(walkMap&&window.google)google.maps.event.trigger(walkMap,'resize')},150);}
+ if(id==='trip'){initTripMap();setTimeout(()=>mapResize(tripMap,tripMapProvider),150);}
+ if(id==='walking'){initWalkMap();setTimeout(()=>mapResize(walkMap,walkMapProvider),150);}
 }
 function renderAll(){renderDashboard();renderExpenses();renderVehicles();renderWalkers();renderSelects();renderTrips();renderWalkHistory();renderUsers();document.getElementById('defaultRate').value=state.settings.rate;const gk=document.getElementById('gmapsKey');if(gk)gk.value=state.settings.gmapsKey||'';const at=document.getElementById('autoTripToggle');if(at)at.checked=state.settings.autoTrip!==false}
 const CATEGORY_META={
@@ -518,27 +580,29 @@ let locationConsent=false;
 
 function setPermissionUI(state, message){
  gpsPermission=state;
- const badge=document.getElementById('permissionState'), btn=document.getElementById('permissionBtn'), start=document.getElementById('startTrip'), info=document.getElementById('gpsInfo');
- const wbadge=document.getElementById('walkPermissionState'), wbtn=document.getElementById('walkPermissionBtn'), wstart=document.getElementById('startWalk');
+ const badge=document.getElementById('permissionState'), btn=document.getElementById('permissionBtn'), info=document.getElementById('gpsInfo');
+ const wbadge=document.getElementById('walkPermissionState'), wbtn=document.getElementById('walkPermissionBtn');
  const map={granted:['Granted','text-bg-success'],denied:['Denied','text-bg-danger'],prompt:['Not Requested','text-bg-secondary'],unsupported:['Unsupported','text-bg-danger']};
  const item=map[state]||map.prompt;
  badge.textContent=item[0]; badge.className='badge '+item[1];
  if(wbadge){wbadge.textContent=item[0]; wbadge.className='badge '+item[1];}
+ // The Start Trip / Start Walk buttons stay enabled at every stage — pressing them is
+ // itself what triggers the browser's location prompt (see startTrip/startWalk onclick).
  if(state==='granted'){
-   btn.classList.add('d-none');start.disabled=!locationConsent;info.textContent=message||'Location access granted. You can start the trip.';
-   if(wbtn)wbtn.classList.add('d-none'); if(wstart)wstart.disabled=!locationConsent;
+   btn.classList.add('d-none');info.textContent=message||'Location access granted.';
+   if(wbtn)wbtn.classList.add('d-none');
  }
  else if(state==='denied'){
-   btn.classList.remove('d-none');start.disabled=true;info.textContent=message||'Location access was denied. Enable location permission in browser settings and try again.';
-   if(wbtn)wbtn.classList.remove('d-none'); if(wstart)wstart.disabled=true;
+   btn.classList.remove('d-none');info.textContent=message||'Location access was denied. Enable location permission in browser settings and try again.';
+   if(wbtn)wbtn.classList.remove('d-none');
  }
  else if(state==='unsupported'){
-   btn.classList.add('d-none');start.disabled=true;info.textContent='This browser/device does not support location services.';
-   if(wbtn)wbtn.classList.add('d-none'); if(wstart)wstart.disabled=true;
+   btn.classList.add('d-none');info.textContent='This browser/device does not support location services.';
+   if(wbtn)wbtn.classList.add('d-none');
  }
  else {
-   btn.classList.remove('d-none');start.disabled=true;info.textContent=message||'Location permission has not been requested.';
-   if(wbtn)wbtn.classList.remove('d-none'); if(wstart)wstart.disabled=true;
+   btn.classList.remove('d-none');info.textContent=message||'Location permission has not been requested yet — press Start to begin.';
+   if(wbtn)wbtn.classList.remove('d-none');
  }
 }
 
@@ -566,7 +630,9 @@ async function syncBrowserLocationPermission(){
  return 'prompt';
 }
 
-function requestGPSPermission(){
+// onGranted (optional) fires right after permission is confirmed — used by the Start
+// Trip/Start Walk buttons to chain straight into starting the tracker with no extra tap.
+function requestGPSPermission(onGranted){
  if(!navigator.geolocation){
    setPermissionUI('unsupported','This browser/device does not support location services.');
    showLocationHelp(true);
@@ -576,7 +642,8 @@ function requestGPSPermission(){
  const btn=document.getElementById('permissionBtn');
  const wbtn=document.getElementById('walkPermissionBtn');
  const retry=document.getElementById('retryLocationBtn');
- btn.disabled=true;
+ const startBtn=document.getElementById('startTrip'), startWalkBtn=document.getElementById('startWalk');
+ btn.disabled=true; startBtn.disabled=true; if(startWalkBtn)startWalkBtn.disabled=true;
  btn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span> Waiting for browser permission…';
  if(wbtn){wbtn.disabled=true;wbtn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span> Waiting for permission…';}
 
@@ -586,39 +653,40 @@ function requestGPSPermission(){
    pos=>{
      locationConsent=true;
      setPermissionUI('granted',
-       `Location access granted • ±${Math.round(pos.coords.accuracy)}m accuracy. Tap Start Trip when you are ready.`);
+       `Location access granted • ±${Math.round(pos.coords.accuracy)}m accuracy.`);
      updateBrowserAskStatus('granted');
      showLocationHelp(false);
      document.getElementById('gpsStatus').innerHTML='<span class="gps-dot on"></span> Location ready';
-     btn.disabled=false;
+     btn.disabled=false; startBtn.disabled=false; if(startWalkBtn)startWalkBtn.disabled=false;
      btn.innerHTML='<i class="bi bi-geo-alt-fill"></i> Location Access Granted';
      retry.classList.add('d-none');
      if(wbtn){wbtn.disabled=false;wbtn.innerHTML='<i class="bi bi-geo-alt-fill"></i> Location Access Granted';}
-     beginTripWatch(); beginWalkWatch(); // start listening in the background so a trip/walk can be auto-detected
+     beginTripWatch(); beginWalkWatch(); // start listening in the background so a trip/walk can be auto-detected for the rest of the day
+     if(onGranted) onGranted();
    },
    err=>{
-     btn.disabled=false;
-     btn.innerHTML='<i class="bi bi-geo-alt-fill"></i> Ask Browser for Location Access';
-     if(wbtn){wbtn.disabled=false;wbtn.innerHTML='<i class="bi bi-geo-alt-fill"></i> Ask Browser for Location Access';}
+     btn.disabled=false; startBtn.disabled=false; if(startWalkBtn)startWalkBtn.disabled=false;
+     btn.innerHTML='<i class="bi bi-geo-alt-fill"></i> Grant Location Access Now (optional)';
+     if(wbtn){wbtn.disabled=false;wbtn.innerHTML='<i class="bi bi-geo-alt-fill"></i> Grant Location Access Now (optional)';}
 
      if(err.code===1){
        locationConsent=false;
        setPermissionUI('denied',
-         'The browser did not grant location access. If Chrome shows a permission prompt, choose Allow. If no prompt appears, check this website’s Location permission in browser settings.');
+         'The browser did not grant location access. If it shows a permission prompt, choose Allow, then press Start again. If no prompt appears, check this website’s Location permission in browser settings.');
        updateBrowserAskStatus('denied');
        showLocationHelp(true);
        retry.classList.remove('d-none');
      }else if(err.code===2){
        setPermissionUI('prompt',
-         'The browser could not obtain a location fix. Check the phone Location/GPS setting and try again.');
+         'The browser could not obtain a location fix. Check the phone Location/GPS setting and press Start again.');
        showLocationHelp(true);
        retry.classList.remove('d-none');
      }else if(err.code===3){
        setPermissionUI('prompt',
-         'The location request timed out. Check Location/GPS services and try again.');
+         'The location request timed out. Check Location/GPS services and press Start again.');
        retry.classList.remove('d-none');
      }else{
-       setPermissionUI('prompt','The browser could not obtain your location. Please try again.');
+       setPermissionUI('prompt','The browser could not obtain your location. Please press Start again.');
        retry.classList.remove('d-none');
      }
    },
@@ -638,11 +706,6 @@ function showLocationHelp(show){
 document.getElementById('permissionBtn').onclick=()=>{
  locationConsent=true;
  showLocationHelp(false);
-
- // IMPORTANT: call the browser geolocation API directly from the user's click.
- // This allows Chrome/Edge/Firefox/Safari to show their native
- // "Allow / Don't allow" location permission dialog when the site is in
- // the browser's "Ask first / Sites can ask" state.
  requestGPSPermission();
 };
 document.getElementById('retryLocationBtn').onclick=async()=>{
@@ -650,15 +713,6 @@ document.getElementById('retryLocationBtn').onclick=async()=>{
  const state=await syncBrowserLocationPermission();
  if(state==='prompt') requestGPSPermission();
  else if(state==='denied') showLocationHelp(true);
-};
-document.getElementById('notNowBtn').onclick=()=>{
- locationConsent=false;
- document.getElementById('startTrip').disabled=true;
- document.getElementById('gpsInfo').textContent='Location tracking is off. No GPS trip is being recorded. You can enable it later.';
- document.getElementById('permissionState').textContent='Not Requested';
- document.getElementById('permissionState').className='badge text-bg-secondary';
- document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS not enabled';
- showLocationHelp(false);
 };
 syncBrowserLocationPermission();
 
@@ -683,27 +737,98 @@ function metFor(speedKmh){ // rough MET table for walking pace
  return 7.0; // brisk/jog while still classified as "walking"
 }
 
-/* ---------- Google Maps loader (shared by GPS Trip and Walking Profile maps) ---------- */
+/* ---------- Map provider loader: tries Google Maps first (full feature set), and
+   automatically falls back to a free OpenStreetMap map if no key is configured, the
+   key is rejected, or Google doesn't respond — so a live map is ALWAYS shown. ---------- */
 let gmapsLoaded=false, gmapsLoading=false, gmapsCallbacks=[];
+let leafletLoaded=false, leafletLoading=false, leafletCallbacks=[];
+let mapProvider=null, mapProviderCallbacks=[], mapProviderResolving=false;
+function setMapWarning(html){
+ document.querySelectorAll('.gmap-key-warning').forEach(x=>{ x.classList.remove('d-none'); x.innerHTML=html; });
+}
+function clearMapWarning(){
+ document.querySelectorAll('.gmap-key-warning').forEach(x=>x.classList.add('d-none'));
+}
+const NO_KEY_MSG='<i class="bi bi-map me-1"></i> Showing a free OpenStreetMap live map. Add a Google Maps API key in <a href="#" onclick="showView(\'settings\');return false;">Settings</a> for satellite view, Street View, search and live traffic.';
+// Google calls this automatically if the key is invalid, unbilled, deleted, or blocked by a referrer restriction.
+window.gm_authFailure=function(){
+ gmapsLoaded=false; gmapsLoading=false;
+ console.error('Google Maps auth failure: the API key was rejected (invalid key, billing not enabled on the Google Cloud project, the Maps JavaScript API / Places API not enabled, or an HTTP-referrer restriction blocking this page\'s address).');
+ fallbackToLeaflet('<i class="bi bi-exclamation-triangle-fill me-1"></i> Google rejected the API key, so we switched to a free OpenStreetMap map instead. Common causes: billing isn\'t enabled on the Google Cloud project, the <b>Maps JavaScript API</b>/<b>Places API</b> aren\'t enabled, or the key has an HTTP-referrer restriction that blocks this page\'s address. Fix it in Google Cloud Console, then update the key in <a href="#" onclick="showView(\'settings\');return false;">Settings</a> to switch back.');
+};
 function ensureGoogleMaps(cb){
  if(gmapsLoaded && window.google && window.google.maps){cb();return;}
  gmapsCallbacks.push(cb);
  if(gmapsLoading)return;
  const key=(state.settings.gmapsKey||'').trim();
- if(!key){ document.querySelectorAll('.gmap-key-warning').forEach(x=>x.classList.remove('d-none')); return; }
+ if(!key) return; // caller (withMapProvider) already routes straight to the fallback when there's no key
  gmapsLoading=true;
  window.__gmapsReady=function(){
    gmapsLoaded=true; gmapsLoading=false;
-   document.querySelectorAll('.gmap-key-warning').forEach(x=>x.classList.add('d-none'));
+   clearMapWarning();
    gmapsCallbacks.forEach(f=>{try{f()}catch(e){console.error(e)}});
    gmapsCallbacks=[];
  };
  const s=document.createElement('script');
  s.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&callback=__gmapsReady`;
  s.async=true; s.defer=true;
- s.onerror=()=>{ gmapsLoading=false; alert('Google Maps failed to load. Check the API key in Settings and that the Maps JavaScript API is enabled for it.'); };
+ s.onerror=()=>{
+   gmapsLoading=false;
+   fallbackToLeaflet('<i class="bi bi-exclamation-triangle-fill me-1"></i> Google Maps could not be reached (no internet connection, blocked by an ad-blocker/firewall, or a malformed key), so we switched to a free OpenStreetMap map instead. Check your connection and the key in <a href="#" onclick="showView(\'settings\');return false;">Settings</a> to switch back.');
+ };
+ document.head.appendChild(s);
+ // If Google hasn't responded in a reasonable time, don't leave the map blank — fall back instead.
+ setTimeout(()=>{
+   if(!gmapsLoaded && gmapsLoading){
+     gmapsLoading=false;
+     fallbackToLeaflet('<i class="bi bi-exclamation-triangle-fill me-1"></i> Google Maps did not respond in time, so we switched to a free OpenStreetMap map instead. Double-check the key in <a href="#" onclick="showView(\'settings\');return false;">Settings</a> and that the <b>Maps JavaScript API</b> is enabled for it.');
+   }
+ },8000);
+}
+function ensureLeaflet(cb){
+ if(leafletLoaded && window.L){cb();return;}
+ leafletCallbacks.push(cb);
+ if(leafletLoading)return;
+ leafletLoading=true;
+ const cssHref='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
+ if(!document.querySelector(`link[href="${cssHref}"]`)){
+   const link=document.createElement('link'); link.rel='stylesheet'; link.href=cssHref; document.head.appendChild(link);
+ }
+ const s=document.createElement('script');
+ s.src='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
+ s.onload=()=>{
+   leafletLoaded=true; leafletLoading=false;
+   leafletCallbacks.forEach(f=>{try{f()}catch(e){console.error(e)}});
+   leafletCallbacks=[];
+ };
+ s.onerror=()=>{ leafletLoading=false; console.error('The fallback map library failed to load — check your internet connection.'); };
  document.head.appendChild(s);
 }
+// Resolves once to 'google' or 'leaflet' and every waiting map is notified; both the GPS Trip
+// and Walking maps share this single decision so they always behave the same way.
+function withMapProvider(cb){
+ if(mapProvider){ cb(mapProvider); return; }
+ mapProviderCallbacks.push(cb);
+ if(mapProviderResolving) return;
+ mapProviderResolving=true;
+ const key=(state.settings.gmapsKey||'').trim();
+ if(!key){ setMapWarning(NO_KEY_MSG); ensureLeaflet(()=>resolveMapProvider('leaflet')); return; }
+ ensureGoogleMaps(()=>resolveMapProvider('google'));
+}
+function resolveMapProvider(p){
+ if(mapProvider) return;
+ mapProvider=p; mapProviderResolving=false;
+ mapProviderCallbacks.forEach(f=>{try{f(p)}catch(e){console.error(e)}});
+ mapProviderCallbacks=[];
+}
+function fallbackToLeaflet(noticeHtml){
+ if(mapProvider==='google') return; // Google already succeeded elsewhere; ignore a late failure signal
+ setMapWarning(noticeHtml);
+ ensureLeaflet(()=>resolveMapProvider('leaflet'));
+}
+// Called from Settings when the key changes, so the next map open re-evaluates the provider.
+function resetMapProvider(){ mapProvider=null; mapProviderCallbacks=[]; mapProviderResolving=false; gmapsLoaded=false; gmapsLoading=false; }
+
 /* Standard Google Maps look & controls: map type (roadmap/satellite/hybrid/terrain),
    street view pegman, zoom, fullscreen, one-finger pan, plus a search box,
    a "my location" button and a traffic layer toggle — added as real in-map controls. */
@@ -768,6 +893,70 @@ function addMapExtras(map){
  };
  map.controls[google.maps.ControlPosition.RIGHT_BOTTOM].push(trafficBtn);
 }
+// Lightweight equivalent for the OpenStreetMap fallback: just a "my location" button
+// (search/traffic/street-view need a paid API and aren't available on the free tile map).
+function addLeafletExtras(map){
+ const LocateControl=L.Control.extend({
+   options:{position:'bottomright'},
+   onAdd:function(){
+     const btn=L.DomUtil.create('button','btn btn-light shadow-sm');
+     btn.type='button'; btn.title='My location';
+     btn.style.cssText='width:40px;height:40px;border-radius:50%;';
+     btn.innerHTML='<i class="bi bi-crosshair"></i>';
+     L.DomEvent.disableClickPropagation(btn);
+     btn.onclick=()=>{
+       if(!navigator.geolocation)return;
+       navigator.geolocation.getCurrentPosition(pos=>{ map.setView([pos.coords.latitude,pos.coords.longitude],16); });
+     };
+     return btn;
+   }
+ });
+ map.addControl(new LocateControl());
+}
+/* Provider-agnostic map helpers so the trip/walk tracking code below doesn't need
+   to know whether it's drawing on Google Maps or the OpenStreetMap fallback. */
+function createLiveMap(el,provider){
+ if(provider==='google'){ const map=new google.maps.Map(el,fullMapOptions()); addMapExtras(map); return map; }
+ const map=L.map(el).setView([20.5937,78.9629],5);
+ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
+ addLeafletExtras(map);
+ return map;
+}
+function createLivePolyline(map,provider,color){
+ if(provider==='google'){ const pl=new google.maps.Polyline({path:[],strokeColor:color,strokeWeight:5}); pl.setMap(map); return pl; }
+ return L.polyline([],{color,weight:5}).addTo(map);
+}
+function polylineAddPoint(pl,provider,lat,lon){
+ if(provider==='google'){ const path=pl.getPath(); path.push(new google.maps.LatLng(lat,lon)); }
+ else pl.addLatLng([lat,lon]);
+}
+function polylineReset(pl,provider){
+ if(!pl) return;
+ if(provider==='google') pl.setPath([]); else pl.setLatLngs([]);
+}
+function createLiveMarker(map,provider,lat,lon,icon){
+ if(provider==='google') return new google.maps.Marker({position:{lat,lng:lon},map,icon});
+ return L.marker([lat,lon],{icon}).addTo(map);
+}
+function markerSetPos(marker,provider,lat,lon){
+ if(provider==='google') marker.setPosition({lat,lng:lon}); else marker.setLatLng([lat,lon]);
+}
+function markerRemove(marker,provider){
+ if(!marker) return;
+ if(provider==='google') marker.setMap(null); else marker.remove();
+}
+function mapSetCenterZoom(map,provider,lat,lon,zoom){
+ if(provider==='google'){ map.setCenter({lat,lng:lon}); if(zoom)map.setZoom(zoom); }
+ else map.setView([lat,lon],zoom||map.getZoom());
+}
+function mapPanTo(map,provider,lat,lon){
+ if(provider==='google') map.panTo({lat,lng:lon}); else map.panTo([lat,lon]);
+}
+function mapResize(map,provider){
+ if(!map) return;
+ if(provider==='google'){ if(window.google&&window.google.maps) google.maps.event.trigger(map,'resize'); }
+ else map.invalidateSize();
+}
 /* ---------- Vehicle / walker marker icons: a distinct icon per vehicle type, shown on the live map ---------- */
 const VEHICLE_ICON_MAP={
  'Two Wheeler':{emoji:'🏍️',color:'#0d6efd'},
@@ -779,44 +968,165 @@ const VEHICLE_ICON_MAP={
  'Other':{emoji:'📍',color:'#495057'}
 };
 const WALK_ICON={emoji:'🚶',color:'#198754'};
+// Analog gauge scale (max km/h shown) and accent colour per vehicle type / walking.
+const VEHICLE_GAUGE_META={
+ 'Two Wheeler':{max:140,color:'#0d6efd'},
+ 'Three Wheeler':{max:80,color:'#fd7e14'},
+ 'Car':{max:220,color:'#198754'},
+ 'Pickup':{max:160,color:'#6f42c1'},
+ 'Truck':{max:120,color:'#dc3545'},
+ 'Bus':{max:100,color:'#20c997'},
+ 'Other':{max:180,color:'#495057'}
+};
+const WALK_GAUGE_META={max:12,color:'#198754'};
+
+/* ---------- Live Meter: digital + analog speedometer popup shown on Start / Pause / Resume ---------- */
+let meterKind=null, meterArcLen=0;
+function buildMeterGauge(){
+ const svg=document.getElementById('meterGaugeSvg');
+ svg.innerHTML=`
+  <defs>
+    <linearGradient id="meterGrad" x1="20" y1="0" x2="180" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#22c55e"/>
+      <stop offset="60%" stop-color="#eab308"/>
+      <stop offset="100%" stop-color="#ef4444"/>
+    </linearGradient>
+    <filter id="meterGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="3.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M20,110 A80,80 0 0,1 180,110" fill="none" stroke="#1e293b" stroke-width="14" stroke-linecap="round"/>
+  <path id="meterValueArc" d="M20,110 A80,80 0 0,1 180,110" fill="none" stroke="url(#meterGrad)" stroke-width="14" stroke-linecap="round" filter="url(#meterGlow)"/>
+  <g id="meterNeedle" transform="rotate(-90 100 110)">
+    <line x1="100" y1="110" x2="100" y2="38" stroke="#fff" stroke-width="4" stroke-linecap="round" filter="url(#meterGlow)"/>
+    <circle cx="100" cy="110" r="7" fill="#fff"/>
+  </g>`;
+ const arc=document.getElementById('meterValueArc');
+ meterArcLen=arc.getTotalLength();
+ arc.style.strokeDasharray=`0 ${meterArcLen}`;
+}
+function updateMeterGauge(speed,maxSpeed){
+ const pct=Math.max(0,Math.min(1,speed/maxSpeed));
+ const arc=document.getElementById('meterValueArc');
+ if(arc && meterArcLen) arc.style.strokeDasharray=`${meterArcLen*pct} ${meterArcLen}`;
+ const needle=document.getElementById('meterNeedle');
+ if(needle) needle.setAttribute('transform',`rotate(${-90+pct*180} 100 110)`);
+ const digital=document.getElementById('meterDigital');
+ if(digital){
+   const zone=pct<0.6?'#4ade80':pct<0.85?'#facc15':'#f87171';
+   digital.style.color=zone; digital.style.textShadow=`0 0 14px ${zone}99`;
+   digital.innerHTML=`${speed.toFixed(0)}<span class="meter-unit">km/h</span>`;
+ }
+ const leds=document.getElementById('meterLeds');
+ if(leds){
+   const total=20, lit=Math.round(pct*total);
+   let html='';
+   for(let i=0;i<total;i++){
+     const c=i<total*0.6?'#22c55e':(i<total*0.85?'#eab308':'#ef4444');
+     const on=i<lit;
+     html+=`<div class="meter-led${on?' on':''}" style="${on?`background:${c};color:${c}`:''}"></div>`;
+   }
+   leds.innerHTML=html;
+ }
+}
+function setMeterStatus(paused){
+ const badge=document.getElementById('meterStatusBadge');
+ if(badge){ badge.textContent=paused?'Paused':'Tracking'; badge.className='badge mb-2 '+(paused?'text-bg-warning':'text-bg-success'); }
+ const pb=document.getElementById('meterPauseBtn');
+ if(pb) pb.innerHTML = paused ? '<i class="bi bi-play-fill"></i> Resume' : '<i class="bi bi-pause-fill"></i> Pause';
+}
+function openLiveMeter(kind){
+ meterKind=kind;
+ const title=document.getElementById('meterTitle');
+ const l4=document.getElementById('meterLabel4'), l6=document.getElementById('meterLabel6');
+ if(kind==='trip'){
+   const v=vehicle(document.getElementById('tripVehicle').value);
+   title.innerHTML=`<i class="bi bi-speedometer2 me-2"></i>${v?.name||'Trip'} • Live Meter`;
+   l4.textContent='Mileage'; l6.textContent='Fuel Cost';
+   buildMeterGauge();
+   setMeterStatus(trip.paused);
+   updateTripMeter(0);
+ } else {
+   title.innerHTML='<i class="bi bi-speedometer2 me-2"></i>Walk • Live Meter';
+   l4.textContent='Steps'; l6.textContent='Calories';
+   buildMeterGauge();
+   setMeterStatus(walk.paused);
+   updateWalkMeter(0);
+ }
+ bootstrap.Modal.getOrCreateInstance(document.getElementById('liveMeterModal')).show();
+}
+function updateTripMeter(speedKmh){
+ if(meterKind!=='trip') return;
+ const v=vehicle(document.getElementById('tripVehicle').value);
+ const meta=VEHICLE_GAUGE_META[v?.type]||VEHICLE_GAUGE_META.Other;
+ updateMeterGauge(speedKmh,meta.max);
+ document.getElementById('meterDistance').textContent=trip.km.toFixed(2)+' km';
+ document.getElementById('meterTime').textContent=fmtTime(trip.movingMs);
+ const avg=trip.movingMs>0?trip.km/(trip.movingMs/3600000):0;
+ document.getElementById('meterAvg').textContent=avg.toFixed(1)+' km/h';
+ document.getElementById('meterVal4').textContent=v?Number(v.mileage).toFixed(1)+' km/L':'--';
+ document.getElementById('meterMax').textContent=(trip.maxSpeed||0).toFixed(1)+' km/h';
+ const fuel=v?trip.km/Number(v.mileage):0, cost=v?fuel*Number(v.rate):0;
+ document.getElementById('meterVal6').textContent=money(cost);
+ setMeterStatus(trip.paused);
+}
+function updateWalkMeter(speedKmh){
+ if(meterKind!=='walk') return;
+ updateMeterGauge(speedKmh,WALK_GAUGE_META.max);
+ document.getElementById('meterDistance').textContent=walk.km.toFixed(2)+' km';
+ document.getElementById('meterTime').textContent=fmtTime(walk.movingMs);
+ const avg=walk.movingMs>0?walk.km/(walk.movingMs/3600000):0;
+ document.getElementById('meterAvg').textContent=avg.toFixed(1)+' km/h';
+ document.getElementById('meterVal4').textContent=Math.round(walk.steps);
+ document.getElementById('meterMax').textContent=(walk.maxSpeed||0).toFixed(1)+' km/h';
+ document.getElementById('meterVal6').textContent=Math.round(walk.calories)+' kcal';
+ setMeterStatus(walk.paused);
+}
+function toggleMeterPause(){ if(meterKind==='trip') toggleTripPause(); else toggleWalkPause(); }
+function stopFromMeter(){
+ const modal=bootstrap.Modal.getInstance(document.getElementById('liveMeterModal'));
+ if(meterKind==='trip') finishTrip('manual'); else finishWalk('manual');
+ modal?.hide();
+}
 function emojiMarkerSVG(emoji,bg){
  return `<svg xmlns="http://www.w3.org/2000/svg" width="46" height="46" viewBox="0 0 46 46">`+
    `<circle cx="23" cy="23" r="20" fill="${bg}" stroke="#ffffff" stroke-width="3"/>`+
    `<text x="23" y="30" font-size="20" text-anchor="middle" font-family="Segoe UI Emoji, Apple Color Emoji, sans-serif">${emoji}</text>`+
    `</svg>`;
 }
-function markerIconFor(cfg){
+function markerIconFor(provider,cfg){
  const svg=emojiMarkerSVG(cfg.emoji,cfg.color);
- return {url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg),scaledSize:new google.maps.Size(46,46),anchor:new google.maps.Point(23,23)};
+ const url='data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg);
+ if(provider==='google') return {url,scaledSize:new google.maps.Size(46,46),anchor:new google.maps.Point(23,23)};
+ return L.icon({iconUrl:url,iconSize:[46,46],iconAnchor:[23,23]});
 }
-function currentTripVehicleIcon(){
+function currentTripVehicleIcon(provider){
  const v=vehicle(document.getElementById('tripVehicle').value);
  const cfg=VEHICLE_ICON_MAP[v?.type]||VEHICLE_ICON_MAP.Other;
- return markerIconFor(cfg);
+ return markerIconFor(provider,cfg);
 }
 
-let tripMap=null, tripMarker=null, tripPolyline=null, tripPath=[], wakeLock=null;
+let tripMap=null, tripMapProvider=null, tripMarker=null, tripPolyline=null, tripPath=[], wakeLock=null;
 function initTripMap(){
- ensureGoogleMaps(()=>{
+ if(tripMap) return;
+ withMapProvider(provider=>{
    if(tripMap) return;
    const el=document.getElementById('tripMap'); if(!el) return;
-   tripMap=new google.maps.Map(el,fullMapOptions());
-   addMapExtras(tripMap);
-   tripPolyline=new google.maps.Polyline({path:tripPath,strokeColor:'#0d6efd',strokeWeight:5});
-   tripPolyline.setMap(tripMap);
+   tripMapProvider=provider;
+   tripMap=createLiveMap(el,provider);
+   tripPolyline=createLivePolyline(tripMap,provider,'#0d6efd');
  });
 }
 function mapUpdate(p){
- ensureGoogleMaps(()=>{
+ withMapProvider(provider=>{
    if(!tripMap) initTripMap();
    if(!tripMap) return;
-   const ll={lat:p.lat,lng:p.lon};
-   const icon=currentTripVehicleIcon();
-   if(!tripMarker){ tripMarker=new google.maps.Marker({position:ll,map:tripMap,icon}); tripMap.setCenter(ll); tripMap.setZoom(17); }
-   else { tripMarker.setPosition(ll); tripMarker.setIcon(icon); }
-   tripPath.push(ll);
-   tripPolyline.setPath(tripPath);
-   tripMap.panTo(ll);
+   const icon=currentTripVehicleIcon(provider);
+   if(!tripMarker){ tripMarker=createLiveMarker(tripMap,provider,p.lat,p.lon,icon); mapSetCenterZoom(tripMap,provider,p.lat,p.lon,17); }
+   else { markerSetPos(tripMarker,provider,p.lat,p.lon); tripMarker.setIcon(icon); }
+   polylineAddPoint(tripPolyline,provider,p.lat,p.lon);
+   mapPanTo(tripMap,provider,p.lat,p.lon);
  });
 }
 async function requestWakeLock(){ try{ if('wakeLock' in navigator) wakeLock=await navigator.wakeLock.request('screen'); }catch(e){} }
@@ -830,18 +1140,22 @@ function renderFuelLog(){
  document.getElementById('tripFuelAdded').textContent=money(trip.fuelLog.reduce((s,f)=>s+f.cost,0));
 }
 document.getElementById('startTrip').onclick=()=>{
- if(!locationConsent || gpsPermission!=='granted')return alert('Please first choose “Allow Location Access” and grant the browser location permission. Tracking will begin only when you press Start Trip.');
- startTripInternal(false);
+ // Ask the browser for location access right here, at the moment of the click — this is
+ // what makes the permission prompt appear, and the trip starts the instant it's granted.
+ if(locationConsent && gpsPermission==='granted'){ startTripInternal(false); openLiveMeter('trip'); return; }
+ requestGPSPermission(()=>{ startTripInternal(false); openLiveMeter('trip'); });
 };
 document.getElementById('stopTrip').onclick=()=>finishTrip('manual');
+document.getElementById('tripPauseBtn').onclick=()=>{ toggleTripPause(); openLiveMeter('trip'); };
 
 let tripStandbyMovingSince=null, tripStandbyLastPoint=null, lastTripAutosave=0;
 
 function startTripInternal(auto){
- trip={running:true,paused:false,points:[],km:0,movingMs:0,lastMoveAt:Date.now(),idleSince:null,fuelLog:[]};
- tripPath=[]; if(tripPolyline)tripPolyline.setPath(tripPath); if(tripMarker){tripMarker.setMap(null);tripMarker=null;}
+ trip={running:true,paused:false,pausedManually:false,points:[],km:0,movingMs:0,maxSpeed:0,lastMoveAt:Date.now(),idleSince:null,fuelLog:[]};
+ tripPath=[]; polylineReset(tripPolyline,tripMapProvider); markerRemove(tripMarker,tripMapProvider); tripMarker=null;
  tripStandbyMovingSince=null; tripStandbyLastPoint=null;
- document.getElementById('startTrip').disabled=true;document.getElementById('stopTrip').disabled=false;
+ document.getElementById('startTrip').disabled=true;document.getElementById('stopTrip').disabled=false;document.getElementById('tripPauseBtn').disabled=false;
+ syncTripPauseButton();
  document.getElementById('gpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking';
  document.getElementById('gpsInfo').textContent=auto?'Movement detected — trip started automatically.':'Tracking location…';
  document.getElementById('pausedBanner').classList.add('d-none');
@@ -851,12 +1165,35 @@ function startTripInternal(auto){
  beginTripWatch();
 }
 
+// Manual pause/resume — independent of (and takes priority over) auto-pause: once the
+// user pauses by hand, movement alone won't auto-resume it; they resume it themselves.
+function toggleTripPause(){
+ if(!trip.running) return;
+ if(trip.paused){
+   trip.paused=false; trip.pausedManually=false; trip.lastMoveAt=Date.now(); trip.idleSince=null;
+   document.getElementById('pausedBanner').classList.add('d-none');
+   document.getElementById('gpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking';
+ } else {
+   trip.paused=true; trip.pausedManually=true; trip.idleSince=Date.now();
+   document.getElementById('pausedBanner').classList.remove('d-none');
+   document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> Paused';
+ }
+ syncTripPauseButton();
+ updateTripMeter(0);
+}
+function syncTripPauseButton(){
+ const btn=document.getElementById('tripPauseBtn');
+ if(btn) btn.innerHTML = trip.paused ? '<i class="bi bi-play-fill"></i> Resume' : '<i class="bi bi-pause-fill"></i> Pause';
+ setMeterStatus(trip.paused);
+}
+
 function beginTripWatch(){
  if(watchId!==null) return; // one continuous watch: handles standby auto-start AND active tracking
  watchId=navigator.geolocation.watchPosition(tripGpsTick,
    err=>{document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS error';console.warn('GPS error:',err.message);},
    {enableHighAccuracy:true,maximumAge:3000,timeout:10000});
 }
+
 
 function tripGpsTick(pos){
  const p={lat:pos.coords.latitude,lon:pos.coords.longitude,acc:pos.coords.accuracy,time:Date.now()};
@@ -872,10 +1209,13 @@ function tripGpsTick(pos){
          trip.paused=true; trip.idleSince=Date.now();
          document.getElementById('pausedBanner').classList.remove('d-none');
          document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> Auto-paused';
+         syncTripPauseButton();
        }
      } else {
        trip.lastMoveAt=Date.now(); trip.idleSince=null;
-       if(trip.paused){ trip.paused=false; document.getElementById('pausedBanner').classList.add('d-none'); document.getElementById('gpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking'; }
+       if(speedKmh>trip.maxSpeed) trip.maxSpeed=speedKmh;
+       // Only auto-resume if the pause was automatic — a manual pause waits for the user.
+       if(trip.paused && !trip.pausedManually){ trip.paused=false; document.getElementById('pausedBanner').classList.add('d-none'); document.getElementById('gpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking'; syncTripPauseButton(); }
        if(!trip.paused){ trip.km+=d; trip.movingMs+=dt*1000; }
      }
    }
@@ -890,6 +1230,7 @@ function tripGpsTick(pos){
  document.getElementById('tripFuel').textContent=fuel.toFixed(2);
  document.getElementById('tripCost').textContent=money(cost);
  document.getElementById('gpsInfo').textContent=`Lat ${p.lat.toFixed(5)} • Lon ${p.lon.toFixed(5)} • ±${Math.round(p.acc)}m`;
+ updateTripMeter(speedKmh);
  // Failsafe: if left paused for too long (forgot to press Stop), auto-save & finish so the trip is never lost.
  if(trip.paused && trip.idleSince && (Date.now()-trip.idleSince)>AUTO_STOP_IDLE_MS){ finishTrip('idle'); return; }
  // Periodic snapshot to localStorage so a closed tab/crash never loses progress.
@@ -944,10 +1285,11 @@ function finishTrip(reason){
  const fuelPurchased=trip.fuelLog.reduce((s,f)=>s+f.cost,0);
  const km=trip.km;
  if(km>0){state.trips.push({id:Date.now(),date:new Date().toLocaleString('en-IN'),vehicleId:v?.id,purpose:document.getElementById('tripPurpose').value||'Trip',km:Number(km.toFixed(3)),fuel:Number(fuel.toFixed(3)),cost:Number(cost.toFixed(2)),fuelPurchased:Number(fuelPurchased.toFixed(2)),fuelLog:trip.fuelLog,points:trip.points,autoSaved:reason==='idle'})}
- trip.running=false;document.getElementById('startTrip').disabled=false;document.getElementById('stopTrip').disabled=true;document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS idle';
+ trip.running=false;document.getElementById('startTrip').disabled=false;document.getElementById('stopTrip').disabled=true;document.getElementById('tripPauseBtn').disabled=true;document.getElementById('gpsStatus').innerHTML='<span class="gps-dot"></span> GPS idle';
  document.getElementById('pausedBanner').classList.add('d-none'); document.getElementById('fuelAddBox').classList.add('d-none');
  localStorage.removeItem(ACTIVE_TRIP_KEY);
  persist();renderAll();
+ if(meterKind==='trip'){ bootstrap.Modal.getInstance(document.getElementById('liveMeterModal'))?.hide(); meterKind=null; }
  // Keep the watch alive so a future trip can still be auto-detected while permission remains granted.
  tripStandbyMovingSince=null; tripStandbyLastPoint=null; beginTripWatch();
  if(km>0){
@@ -957,49 +1299,69 @@ function finishTrip(reason){
 }
 function renderTrips(){document.getElementById('tripRows').innerHTML=state.trips.slice().reverse().map(t=>`<tr><td>${t.date}${t.autoSaved?' <span class="badge text-bg-warning ms-1" title="Auto-saved after inactivity">auto</span>':t.recovered?' <span class="badge text-bg-info ms-1" title="Recovered after an unexpected close">recovered</span>':''}</td><td>${vehicle(t.vehicleId)?.name||'-'}</td><td>${t.purpose}</td><td>${(t.km||0).toFixed(2)} km</td><td>${(t.fuel||0).toFixed(2)} L</td><td>${money(t.cost)}</td><td>${money(t.fuelPurchased||0)}</td></tr>`).join('')||'<tr><td colspan=7 class="text-center muted">No trips saved</td></tr>'}
 /* ---------- Walking module: its own independent live tracker, map and history (kept fully separate from vehicle GPS Trip) ---------- */
-let walkMap=null, walkMarker=null, walkPolyline=null, walkWatchId=null, walkPath=[];
-let walk={running:false,paused:false,points:[],km:0,steps:0,calories:0,movingMs:0,lastMoveAt:Date.now()};
+let walkMap=null, walkMapProvider=null, walkMarker=null, walkPolyline=null, walkWatchId=null, walkPath=[];
+let walk={running:false,paused:false,pausedManually:false,points:[],km:0,steps:0,calories:0,movingMs:0,maxSpeed:0,lastMoveAt:Date.now(),idleSince:null};
 function initWalkMap(){
- ensureGoogleMaps(()=>{
+ if(walkMap) return;
+ withMapProvider(provider=>{
    if(walkMap) return;
    const el=document.getElementById('walkMap'); if(!el) return;
-   walkMap=new google.maps.Map(el,fullMapOptions());
-   addMapExtras(walkMap);
-   walkPolyline=new google.maps.Polyline({path:walkPath,strokeColor:'#198754',strokeWeight:5});
-   walkPolyline.setMap(walkMap);
+   walkMapProvider=provider;
+   walkMap=createLiveMap(el,provider);
+   walkPolyline=createLivePolyline(walkMap,provider,'#198754');
  });
 }
 function walkMapUpdate(p){
- ensureGoogleMaps(()=>{
+ withMapProvider(provider=>{
    if(!walkMap) initWalkMap();
    if(!walkMap) return;
-   const ll={lat:p.lat,lng:p.lon};
-   if(!walkMarker){ walkMarker=new google.maps.Marker({position:ll,map:walkMap,icon:markerIconFor(WALK_ICON)}); walkMap.setCenter(ll); walkMap.setZoom(17); }
-   else walkMarker.setPosition(ll);
-   walkPath.push(ll);
-   walkPolyline.setPath(walkPath);
-   walkMap.panTo(ll);
+   if(!walkMarker){ walkMarker=createLiveMarker(walkMap,provider,p.lat,p.lon,markerIconFor(provider,WALK_ICON)); mapSetCenterZoom(walkMap,provider,p.lat,p.lon,17); }
+   else markerSetPos(walkMarker,provider,p.lat,p.lon);
+   polylineAddPoint(walkPolyline,provider,p.lat,p.lon);
+   mapPanTo(walkMap,provider,p.lat,p.lon);
  });
 }
 document.getElementById('walkPermissionBtn').onclick=()=>{ locationConsent=true; showLocationHelp(false); requestGPSPermission(); };
 document.getElementById('startWalk').onclick=()=>{
- if(!locationConsent || gpsPermission!=='granted')return alert('Please first choose “Ask Browser for Location Access” and grant the browser location permission. Tracking will begin only when you press Start Walk.');
- startWalkInternal(false);
+ if(locationConsent && gpsPermission==='granted'){ startWalkInternal(false); openLiveMeter('walk'); return; }
+ requestGPSPermission(()=>{ startWalkInternal(false); openLiveMeter('walk'); });
 };
 document.getElementById('stopWalk').onclick=()=>finishWalk('manual');
+document.getElementById('walkPauseBtn').onclick=()=>{ toggleWalkPause(); openLiveMeter('walk'); };
 
 let walkStandbyMovingSince=null, walkStandbyLastPoint=null, lastWalkAutosave=0;
 
 function startWalkInternal(auto){
- walk={running:true,paused:false,points:[],km:0,steps:0,calories:0,movingMs:0,lastMoveAt:Date.now(),idleSince:null};
- walkPath=[]; if(walkPolyline)walkPolyline.setPath(walkPath); if(walkMarker){walkMarker.setMap(null);walkMarker=null;}
+ walk={running:true,paused:false,pausedManually:false,points:[],km:0,steps:0,calories:0,movingMs:0,maxSpeed:0,lastMoveAt:Date.now(),idleSince:null};
+ walkPath=[]; polylineReset(walkPolyline,walkMapProvider); markerRemove(walkMarker,walkMapProvider); walkMarker=null;
  walkStandbyMovingSince=null; walkStandbyLastPoint=null;
- document.getElementById('startWalk').disabled=true;document.getElementById('stopWalk').disabled=false;
+ document.getElementById('startWalk').disabled=true;document.getElementById('stopWalk').disabled=false;document.getElementById('walkPauseBtn').disabled=false;
+ syncWalkPauseButton();
  document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking';
  document.getElementById('walkGpsInfo').textContent=auto?'Movement detected — walk started automatically.':'Tracking location…';
  document.getElementById('walkPausedBanner').classList.add('d-none');
  initWalkMap(); requestWakeLock();
  beginWalkWatch();
+}
+
+function toggleWalkPause(){
+ if(!walk.running) return;
+ if(walk.paused){
+   walk.paused=false; walk.pausedManually=false; walk.lastMoveAt=Date.now(); walk.idleSince=null;
+   document.getElementById('walkPausedBanner').classList.add('d-none');
+   document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking';
+ } else {
+   walk.paused=true; walk.pausedManually=true; walk.idleSince=Date.now();
+   document.getElementById('walkPausedBanner').classList.remove('d-none');
+   document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot"></span> Paused';
+ }
+ syncWalkPauseButton();
+ updateWalkMeter(0);
+}
+function syncWalkPauseButton(){
+ const btn=document.getElementById('walkPauseBtn');
+ if(btn) btn.innerHTML = walk.paused ? '<i class="bi bi-play-fill"></i> Resume' : '<i class="bi bi-pause-fill"></i> Pause';
+ setMeterStatus(walk.paused);
 }
 
 function beginWalkWatch(){
@@ -1023,10 +1385,12 @@ function walkGpsTick(pos){
          walk.paused=true; walk.idleSince=Date.now();
          document.getElementById('walkPausedBanner').classList.remove('d-none');
          document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot"></span> Auto-paused';
+         syncWalkPauseButton();
        }
      } else {
        walk.lastMoveAt=Date.now(); walk.idleSince=null;
-       if(walk.paused){ walk.paused=false; document.getElementById('walkPausedBanner').classList.add('d-none'); document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking'; }
+       if(speedKmh>walk.maxSpeed) walk.maxSpeed=speedKmh;
+       if(walk.paused && !walk.pausedManually){ walk.paused=false; document.getElementById('walkPausedBanner').classList.add('d-none'); document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot on"></span> GPS tracking'; syncWalkPauseButton(); }
        if(!walk.paused){
          walk.km+=d; walk.movingMs+=dt*1000;
          const w=activeWalker();
@@ -1044,6 +1408,7 @@ function walkGpsTick(pos){
  document.getElementById('walkSteps').textContent=Math.round(walk.steps);
  document.getElementById('walkCalories').textContent=Math.round(walk.calories);
  document.getElementById('walkGpsInfo').textContent=`Lat ${p.lat.toFixed(5)} • Lon ${p.lon.toFixed(5)} • ±${Math.round(p.acc)}m`;
+ updateWalkMeter(speedKmh);
  // Failsafe: if left paused for too long (forgot to press Stop), auto-save & finish so the walk is never lost.
  if(walk.paused && walk.idleSince && (Date.now()-walk.idleSince)>AUTO_STOP_IDLE_MS){ finishWalk('idle'); return; }
  if(Date.now()-lastWalkAutosave>AUTOSAVE_MS){ lastWalkAutosave=Date.now(); autosaveActiveWalk(); }
@@ -1081,10 +1446,11 @@ function finishWalk(reason){
  const w=activeWalker();
  const km=walk.km;
  if(km>0){ state.walks=state.walks||[]; state.walks.push({id:Date.now(),date:new Date().toLocaleString('en-IN'),walkerId:w?.id,walkerName:w?.name||'—',note:document.getElementById('walkPurpose').value||'Walk',km:Number(km.toFixed(3)),movingMs:walk.movingMs,steps:Math.round(walk.steps),calories:Math.round(walk.calories),points:walk.points,autoSaved:reason==='idle'}); }
- walk.running=false;document.getElementById('startWalk').disabled=false;document.getElementById('stopWalk').disabled=true;document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot"></span> GPS idle';
+ walk.running=false;document.getElementById('startWalk').disabled=false;document.getElementById('stopWalk').disabled=true;document.getElementById('walkPauseBtn').disabled=true;document.getElementById('walkGpsStatus').innerHTML='<span class="gps-dot"></span> GPS idle';
  document.getElementById('walkPausedBanner').classList.add('d-none');
  localStorage.removeItem(ACTIVE_WALK_KEY);
  persist();renderWalkHistory();
+ if(meterKind==='walk'){ bootstrap.Modal.getInstance(document.getElementById('liveMeterModal'))?.hide(); meterKind=null; }
  walkStandbyMovingSince=null; walkStandbyLastPoint=null; beginWalkWatch();
  if(km>0){
    if(reason==='idle') alert(`No movement for 20+ minutes, so this walk was auto-saved to make sure nothing was lost.\nDistance: ${km.toFixed(2)} km\nSteps: ${Math.round(walk.steps)} • Calories: ${Math.round(walk.calories)} kcal`);
@@ -1093,6 +1459,33 @@ function finishWalk(reason){
 }
 function renderWalkHistory(){document.getElementById('walkRows').innerHTML=(state.walks||[]).slice().reverse().map(w=>`<tr><td>${w.date}${w.autoSaved?' <span class="badge text-bg-warning ms-1" title="Auto-saved after inactivity">auto</span>':w.recovered?' <span class="badge text-bg-info ms-1" title="Recovered after an unexpected close">recovered</span>':''}</td><td>${w.walkerName||'-'}</td><td>${w.note||''}</td><td>${(w.km||0).toFixed(2)} km</td><td>${fmtTime(w.movingMs||0)}</td><td>${w.steps||0}</td><td>${w.calories||0} kcal</td></tr>`).join('')||'<tr><td colspan=7 class="text-center muted">No walks saved</td></tr>'}
 function renderReports(){const cats={};state.expenses.forEach(e=>cats[e.cat]=(cats[e.cat]||0)+Number(e.amount));document.getElementById('reportExpense').innerHTML=Object.entries(cats).map(([k,v])=>`<div class="d-flex justify-content-between border-bottom py-2"><span>${k}</span><b>${money(v)}</b></div>`).join('')||'No data';const vs={};state.trips.forEach(t=>{const n=vehicle(t.vehicleId)?.name||'Unknown';vs[n]=(vs[n]||0)+t.km});document.getElementById('reportVehicle').innerHTML=Object.entries(vs).map(([k,v])=>`<div class="d-flex justify-content-between border-bottom py-2"><span>${k}</span><b>${v.toFixed(1)} km</b></div>`).join('')||'No data'}
+function testMapsKey(){
+ const key=(document.getElementById('gmapsKey').value||'').trim();
+ const out=document.getElementById('gmapsKeyTestResult');
+ if(!key){ out.innerHTML='<span class="text-danger"><i class="bi bi-x-circle"></i> Paste a key first.</span>'; return; }
+ out.innerHTML='<span class="text-muted"><span class="spinner-border spinner-border-sm me-1"></span> Testing the Maps JavaScript API with this key…</span>';
+ const cbName='__gmapsTest_'+Date.now();
+ let settled=false, script=null;
+ const prevAuthFailure=window.gm_authFailure;
+ const finish=(html)=>{
+   if(settled) return; settled=true;
+   out.innerHTML=html;
+   window.gm_authFailure=prevAuthFailure;
+   delete window[cbName];
+   if(script) script.remove();
+ };
+ window.gm_authFailure=function(){
+   finish('<span class="text-danger"><i class="bi bi-x-circle-fill"></i> Rejected by Google — billing, an unlisted API, or a referrer restriction is blocking it. See the checklist above.</span>');
+ };
+ window[cbName]=function(){
+   finish('<span class="text-success"><i class="bi bi-check-circle-fill"></i> Key accepted — the Maps JavaScript API loaded successfully. Save Settings, then reopen GPS Trip / Walking Profile.</span>');
+ };
+ script=document.createElement('script');
+ script.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=${cbName}`;
+ script.onerror=()=>finish('<span class="text-danger"><i class="bi bi-x-circle-fill"></i> Could not reach Google (check your internet connection, or an ad-blocker/firewall may be blocking maps.googleapis.com).</span>');
+ document.head.appendChild(script);
+ setTimeout(()=>finish('<span class="text-warning"><i class="bi bi-exclamation-circle-fill"></i> No response after 10s — check the key and your connection.</span>'),10000);
+}
 function saveSettings(){
  state.settings.rate=Number(document.getElementById('defaultRate').value)||105;
  state.settings.autoTrip=!!document.getElementById('autoTripToggle').checked;
@@ -1100,8 +1493,13 @@ function saveSettings(){
  const keyChanged=newKey!==(state.settings.gmapsKey||'');
  state.settings.gmapsKey=newKey;
  persist();
- if(keyChanged && newKey && !gmapsLoaded){ ensureGoogleMaps(()=>{}); document.querySelectorAll('.gmap-key-warning').forEach(x=>x.classList.add('d-none')); }
- alert(keyChanged?'Settings saved. If the map does not appear, refresh the page once.':'Settings saved.');
+ if(keyChanged){
+   resetMapProvider();
+   tripMap=null; tripMarker=null; tripPolyline=null; tripMapProvider=null; tripPath=[];
+   walkMap=null; walkMarker=null; walkPolyline=null; walkMapProvider=null; walkPath=[];
+   document.getElementById('tripMap').innerHTML=''; document.getElementById('walkMap').innerHTML='';
+ }
+ alert(keyChanged?'Settings saved. The map will reload with the new key next time you open GPS Trip / Walking Profile.':'Settings saved.');
 }
 function renderUsers(){if(currentUser!=='admin')return;document.getElementById('userRows').innerHTML=state.users.map((u,i)=>`<tr><td>${u.business}</td><td>${u.username}</td><td>${u.plan}</td><td>${u.expiry}</td><td><span class="badge ${u.status==='Active'?'text-bg-success':'text-bg-warning'}">${u.status}</span></td><td><button class="btn btn-sm btn-outline-secondary" onclick="toggleUser(${i})">Toggle</button></td></tr>`).join('')}
 function addUser(){const u={business:document.getElementById('uBusiness').value,username:document.getElementById('uName').value,plan:document.getElementById('uPlan').value,expiry:new Date(Date.now()+30*864e5).toISOString().slice(0,10),status:document.getElementById('uStatus').value};if(!u.business||!u.username)return alert('Enter business and username.');state.users.push(u);persist();bootstrap.Modal.getInstance(document.getElementById('userModal')).hide();document.getElementById('uBusiness').value='';document.getElementById('uName').value='';document.getElementById('uPass').value='';renderUsers();alert('Subscriber created. In production, credentials should be generated/stored by the Apps Script backend.')}
