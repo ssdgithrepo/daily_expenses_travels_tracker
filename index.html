@@ -578,6 +578,23 @@ function delExpense(id){state.expenses=state.expenses.filter(e=>e.id!==id);persi
 let gpsPermission='not-requested';
 let locationConsent=false;
 
+// Updates the small "Browser location permission" status strip. This was previously called
+// but never defined — that ReferenceError was silently aborting the Start Trip/Start Walk
+// permission callback before it reached beginTripWatch()/onGranted(), which is why the
+// Start Trip button appeared to do nothing after the browser's permission prompt.
+function updateBrowserAskStatus(state){
+ const text=document.getElementById('browserAskText'), badge=document.getElementById('browserPermissionBadge');
+ if(!text||!badge) return;
+ const map={
+   granted:['Granted — this site can access your location.','text-bg-success','GRANTED'],
+   denied:['Blocked — enable Location for this site in your browser settings.','text-bg-danger','BLOCKED'],
+   prompt:['Ask first — the browser can request your location.','text-bg-secondary','ASK FIRST'],
+   unsupported:['Not supported by this browser/device.','text-bg-danger','UNSUPPORTED']
+ };
+ const item=map[state]||map.prompt;
+ text.textContent=item[0]; badge.textContent=item[2]; badge.className='badge ms-1 '+item[1];
+}
+
 function setPermissionUI(state, message){
  gpsPermission=state;
  const badge=document.getElementById('permissionState'), btn=document.getElementById('permissionBtn'), info=document.getElementById('gpsInfo');
