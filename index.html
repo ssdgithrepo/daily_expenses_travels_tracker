@@ -46,6 +46,7 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 .meter-stat-label{font-size:.68rem;opacity:.6;text-transform:uppercase;letter-spacing:.6px}
 .meter-stat-val{font-weight:700;font-size:1.05rem}
 .meter-stats{background:rgba(255,255,255,.04);border-radius:14px;padding:.6rem .3rem}
+#meterMap{height:150px;border-radius:14px;margin-top:10px;overflow:hidden;background:#1e293b}
 .mapbox{height:260px;border-radius:16px;background:repeating-linear-gradient(45deg,#eef2f7,#eef2f7 10px,#e7edf5 10px,#e7edf5 20px);display:flex;align-items:center;justify-content:center;color:#64748b}
 #tripMap,#walkMap{height:320px;border-radius:16px;z-index:0}
 .footer{font-size:.8rem;color:#94a3b8}
@@ -221,6 +222,7 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
         vehicle mileage and estimated fuel cost for this trip.
       </div>
       <div class="small mt-2"><b>Your browser will show the location prompt the moment you press “Start Trip” below — nothing is tracked before that.</b></div>
+      <div class="small mt-2 text-muted"><i class="bi bi-info-circle me-1"></i>To keep tracking running while you switch apps: keep this tab open (a screen wake-lock is requested automatically so the phone won't sleep) and, on Android, use "Add to Home screen" for the steadiest background behaviour. Locking the screen or fully closing the browser can still pause GPS updates — that's a phone/browser limit that applies to every website, not just this one. Whatever distance was recorded right up to that point is always saved automatically, so nothing is lost.</div>
       <div class="mt-2"><span class="badge text-bg-secondary" id="permissionState">Not Requested</span></div>
     </div>
   </div>
@@ -343,13 +345,16 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
     <svg id="meterGaugeSvg" viewBox="0 0 200 128" class="gauge-svg"></svg>
     <div id="meterDigital" class="meter-digital">0<span class="meter-unit">km/h</span></div>
     <div id="meterLeds" class="meter-leds"></div>
-    <div class="row g-2 mt-3 meter-stats mx-0">
-     <div class="col-4"><div class="meter-stat-label">Distance</div><div class="meter-stat-val" id="meterDistance">0.00 km</div></div>
-     <div class="col-4"><div class="meter-stat-label">Time</div><div class="meter-stat-val" id="meterTime">00:00</div></div>
-     <div class="col-4"><div class="meter-stat-label">Avg Speed</div><div class="meter-stat-val" id="meterAvg">0.0 km/h</div></div>
-     <div class="col-4"><div class="meter-stat-label" id="meterLabel4">Mileage</div><div class="meter-stat-val" id="meterVal4">--</div></div>
-     <div class="col-4"><div class="meter-stat-label">Max Speed</div><div class="meter-stat-val" id="meterMax">0.0 km/h</div></div>
-     <div class="col-4"><div class="meter-stat-label" id="meterLabel6">Fuel Cost</div><div class="meter-stat-val" id="meterVal6">--</div></div>
+    <div id="meterMap"></div>
+    <div class="row g-2 mt-2 meter-stats mx-0">
+     <div class="col-3"><div class="meter-stat-label">Distance</div><div class="meter-stat-val" id="meterDistance">0.00 km</div></div>
+     <div class="col-3"><div class="meter-stat-label">Time</div><div class="meter-stat-val" id="meterTime">00:00</div></div>
+     <div class="col-3"><div class="meter-stat-label">Avg Speed</div><div class="meter-stat-val" id="meterAvg">0.0 km/h</div></div>
+     <div class="col-3"><div class="meter-stat-label">Max Speed</div><div class="meter-stat-val" id="meterMax">0.0 km/h</div></div>
+     <div class="col-3"><div class="meter-stat-label" id="meterLabel4">Live Mileage</div><div class="meter-stat-val" id="meterVal4">--</div></div>
+     <div class="col-3"><div class="meter-stat-label" id="meterLabel6">Fuel Used</div><div class="meter-stat-val" id="meterVal6">--</div></div>
+     <div class="col-3"><div class="meter-stat-label" id="meterLabel7">Fuel Cost</div><div class="meter-stat-val" id="meterVal7">--</div></div>
+     <div class="col-3"><div class="meter-stat-label">GPS Accuracy</div><div class="meter-stat-val" id="meterVal8">--</div></div>
     </div>
    </div>
    <div class="modal-footer border-0 justify-content-center gap-2 pt-0">
@@ -849,7 +854,22 @@ function resetMapProvider(){ mapProvider=null; mapProviderCallbacks=[]; mapProvi
 /* Standard Google Maps look & controls: map type (roadmap/satellite/hybrid/terrain),
    street view pegman, zoom, fullscreen, one-finger pan, plus a search box,
    a "my location" button and a traffic layer toggle — added as real in-map controls. */
-function fullMapOptions(){
+function fullMapOptions(compact){
+ if(compact){
+   return {
+     center:{lat:20.5937,lng:78.9629}, zoom:5,
+     mapTypeId:'roadmap',
+     mapTypeControl:false,
+     streetViewControl:false,
+     fullscreenControl:false,
+     zoomControl:false,
+     scaleControl:false,
+     rotateControl:false,
+     gestureHandling:'greedy',
+     clickableIcons:false,
+     disableDefaultUI:true
+   };
+ }
  return {
    center:{lat:20.5937,lng:78.9629}, zoom:5,
    mapTypeId:'roadmap',
@@ -932,11 +952,11 @@ function addLeafletExtras(map){
 }
 /* Provider-agnostic map helpers so the trip/walk tracking code below doesn't need
    to know whether it's drawing on Google Maps or the OpenStreetMap fallback. */
-function createLiveMap(el,provider){
- if(provider==='google'){ const map=new google.maps.Map(el,fullMapOptions()); addMapExtras(map); return map; }
- const map=L.map(el).setView([20.5937,78.9629],5);
+function createLiveMap(el,provider,compact){
+ if(provider==='google'){ const map=new google.maps.Map(el,fullMapOptions(compact)); if(!compact) addMapExtras(map); return map; }
+ const map=L.map(el,compact?{zoomControl:false,attributionControl:false}:{}).setView([20.5937,78.9629],5);
  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
- addLeafletExtras(map);
+ if(!compact) addLeafletExtras(map);
  return map;
 }
 function createLivePolyline(map,provider,color){
@@ -997,7 +1017,64 @@ const VEHICLE_GAUGE_META={
 };
 const WALK_GAUGE_META={max:12,color:'#198754'};
 
-/* ---------- Live Meter: digital + analog speedometer popup shown on Start / Pause / Resume ---------- */
+/* ---------- Live (instantaneous) mileage: real fuel efficiency isn't flat — it's best around a
+   mid-range cruising speed and drops off in heavy stop-go traffic (idling, braking, accelerating)
+   and again at high speed (aerodynamic drag, harder engine load). This estimates the CURRENT
+   km/L at the vehicle's present speed, scaled off its declared/rated mileage, purely as live
+   driving-style feedback — the trip's actual fuel cost keeps using the rated mileage figure. */
+const VEHICLE_OPTIMAL_SPEED={'Two Wheeler':45,'Three Wheeler':35,'Car':60,'Pickup':55,'Truck':50,'Bus':45,'Other':50};
+function liveEfficiencyFactor(speedKmh,vehicleType){
+ if(!speedKmh||speedKmh<=0.5) return 0.35; // idling / stationary with engine on: worst efficiency
+ const opt=VEHICLE_OPTIMAL_SPEED[vehicleType]||50;
+ const diff=speedKmh-opt;
+ const factor=1.08*Math.exp(-(diff*diff)/(2*opt*opt*0.6));
+ return Math.max(0.35,Math.min(1.15,factor));
+}
+function estimateLiveMileage(v,speedKmh){
+ if(!v) return 0;
+ return Number(v.mileage)*liveEfficiencyFactor(speedKmh,v.type);
+}
+function formatPace(avgSpeedKmh){
+ if(!avgSpeedKmh||avgSpeedKmh<=0) return '--';
+ const minPerKm=60/avgSpeedKmh;
+ const mi=Math.floor(minPerKm), s=Math.round((minPerKm-mi)*60);
+ return `${mi}:${String(s).padStart(2,'0')} /km`;
+}
+
+/* ---------- Mini live map inside the meter popup — mirrors the main GPS Trip / Walking map
+   so the route is visible right alongside the speedometer, without leaving the popup. ---------- */
+let meterMap=null, meterMapProvider=null, meterMapMarker=null, meterMapPolyline=null, meterModalOpen=false;
+function initMeterMap(){
+ if(meterMap) return;
+ withMapProvider(provider=>{
+   if(meterMap) return;
+   const el=document.getElementById('meterMap'); if(!el) return;
+   meterMapProvider=provider;
+   meterMap=createLiveMap(el,provider,true);
+   meterMapPolyline=createLivePolyline(meterMap,provider,meterKind==='walk'?'#198754':'#0d6efd');
+ });
+}
+function meterMapReset(){
+ if(meterMapPolyline) polylineReset(meterMapPolyline,meterMapProvider);
+ if(meterMapMarker){ markerRemove(meterMapMarker,meterMapProvider); meterMapMarker=null; }
+}
+function meterMapUpdate(p,iconCfg){
+ withMapProvider(provider=>{
+   if(!meterMap) initMeterMap();
+   if(!meterMap) return;
+   if(!meterMapMarker){ meterMapMarker=createLiveMarker(meterMap,provider,p.lat,p.lon,markerIconFor(provider,iconCfg)); mapSetCenterZoom(meterMap,provider,p.lat,p.lon,16); }
+   else { markerSetPos(meterMapMarker,provider,p.lat,p.lon); meterMapMarker.setIcon(markerIconFor(provider,iconCfg)); }
+   polylineAddPoint(meterMapPolyline,provider,p.lat,p.lon);
+   mapPanTo(meterMap,provider,p.lat,p.lon);
+ });
+}
+document.getElementById('liveMeterModal').addEventListener('shown.bs.modal',()=>{
+ meterModalOpen=true;
+ initMeterMap();
+ setTimeout(()=>mapResize(meterMap,meterMapProvider),150);
+});
+document.getElementById('liveMeterModal').addEventListener('hidden.bs.modal',()=>{ meterModalOpen=false; });
+
 let meterKind=null, meterArcLen=0;
 function buildMeterGauge(){
  const svg=document.getElementById('meterGaugeSvg');
@@ -1054,26 +1131,28 @@ function setMeterStatus(paused){
  if(pb) pb.innerHTML = paused ? '<i class="bi bi-play-fill"></i> Resume' : '<i class="bi bi-pause-fill"></i> Pause';
 }
 function openLiveMeter(kind){
+ const switchingKind = meterKind!==kind;
  meterKind=kind;
  const title=document.getElementById('meterTitle');
- const l4=document.getElementById('meterLabel4'), l6=document.getElementById('meterLabel6');
+ const l4=document.getElementById('meterLabel4'), l6=document.getElementById('meterLabel6'), l7=document.getElementById('meterLabel7');
+ if(switchingKind) meterMapReset();
  if(kind==='trip'){
    const v=vehicle(document.getElementById('tripVehicle').value);
    title.innerHTML=`<i class="bi bi-speedometer2 me-2"></i>${v?.name||'Trip'} • Live Meter`;
-   l4.textContent='Mileage'; l6.textContent='Fuel Cost';
+   l4.textContent='Live Mileage'; l6.textContent='Fuel Used'; l7.textContent='Fuel Cost';
    buildMeterGauge();
    setMeterStatus(trip.paused);
-   updateTripMeter(0);
+   updateTripMeter(0,trip.points.at(-1)?.acc);
  } else {
    title.innerHTML='<i class="bi bi-speedometer2 me-2"></i>Walk • Live Meter';
-   l4.textContent='Steps'; l6.textContent='Calories';
+   l4.textContent='Steps'; l6.textContent='Calories'; l7.textContent='Avg Pace';
    buildMeterGauge();
    setMeterStatus(walk.paused);
-   updateWalkMeter(0);
+   updateWalkMeter(0,walk.points.at(-1)?.acc);
  }
  bootstrap.Modal.getOrCreateInstance(document.getElementById('liveMeterModal')).show();
 }
-function updateTripMeter(speedKmh){
+function updateTripMeter(speedKmh,accuracy){
  if(meterKind!=='trip') return;
  const v=vehicle(document.getElementById('tripVehicle').value);
  const meta=VEHICLE_GAUGE_META[v?.type]||VEHICLE_GAUGE_META.Other;
@@ -1082,23 +1161,35 @@ function updateTripMeter(speedKmh){
  document.getElementById('meterTime').textContent=fmtTime(trip.movingMs);
  const avg=trip.movingMs>0?trip.km/(trip.movingMs/3600000):0;
  document.getElementById('meterAvg').textContent=avg.toFixed(1)+' km/h';
- document.getElementById('meterVal4').textContent=v?Number(v.mileage).toFixed(1)+' km/L':'--';
  document.getElementById('meterMax').textContent=(trip.maxSpeed||0).toFixed(1)+' km/h';
+ document.getElementById('meterVal4').textContent=v?estimateLiveMileage(v,speedKmh).toFixed(1)+' km/L':'--';
  const fuel=v?trip.km/Number(v.mileage):0, cost=v?fuel*Number(v.rate):0;
- document.getElementById('meterVal6').textContent=money(cost);
+ document.getElementById('meterVal6').textContent=v?fuel.toFixed(2)+' L':'--';
+ document.getElementById('meterVal7').textContent=v?money(cost):'--';
+ document.getElementById('meterVal8').textContent=accuracy?'±'+Math.round(accuracy)+' m':'--';
  setMeterStatus(trip.paused);
+ if(meterModalOpen){
+   const vv=vehicle(document.getElementById('tripVehicle').value);
+   const cfg=VEHICLE_ICON_MAP[vv?.type]||VEHICLE_ICON_MAP.Other;
+   const last=trip.points.at(-1); if(last) meterMapUpdate(last,cfg);
+ }
 }
-function updateWalkMeter(speedKmh){
+function updateWalkMeter(speedKmh,accuracy){
  if(meterKind!=='walk') return;
  updateMeterGauge(speedKmh,WALK_GAUGE_META.max);
  document.getElementById('meterDistance').textContent=walk.km.toFixed(2)+' km';
  document.getElementById('meterTime').textContent=fmtTime(walk.movingMs);
  const avg=walk.movingMs>0?walk.km/(walk.movingMs/3600000):0;
  document.getElementById('meterAvg').textContent=avg.toFixed(1)+' km/h';
- document.getElementById('meterVal4').textContent=Math.round(walk.steps);
  document.getElementById('meterMax').textContent=(walk.maxSpeed||0).toFixed(1)+' km/h';
+ document.getElementById('meterVal4').textContent=Math.round(walk.steps);
  document.getElementById('meterVal6').textContent=Math.round(walk.calories)+' kcal';
+ document.getElementById('meterVal7').textContent=formatPace(avg);
+ document.getElementById('meterVal8').textContent=accuracy?'±'+Math.round(accuracy)+' m':'--';
  setMeterStatus(walk.paused);
+ if(meterModalOpen){
+   const last=walk.points.at(-1); if(last) meterMapUpdate(last,WALK_ICON);
+ }
 }
 function toggleMeterPause(){ if(meterKind==='trip') toggleTripPause(); else toggleWalkPause(); }
 function stopFromMeter(){
@@ -1148,7 +1239,15 @@ function mapUpdate(p){
 }
 async function requestWakeLock(){ try{ if('wakeLock' in navigator) wakeLock=await navigator.wakeLock.request('screen'); }catch(e){} }
 function releaseWakeLock(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch(e){} }
-document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && (trip.running||walk.running)) requestWakeLock(); });
+document.addEventListener('visibilitychange',()=>{
+ if(document.visibilityState==='visible' && (trip.running||walk.running)) requestWakeLock();
+ if(document.visibilityState==='hidden'){
+   // Save right away — background timers can be throttled or the tab can be
+   // suspended/killed by the OS at any moment once it's out of view.
+   if(trip.running) autosaveActiveTrip();
+   if(walk.running) autosaveActiveWalk();
+ }
+});
 
 function fmtTime(ms){ const s=Math.floor(ms/1000); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
 
@@ -1170,6 +1269,7 @@ let tripStandbyMovingSince=null, tripStandbyLastPoint=null, lastTripAutosave=0;
 function startTripInternal(auto){
  trip={running:true,paused:false,pausedManually:false,points:[],km:0,movingMs:0,maxSpeed:0,lastMoveAt:Date.now(),idleSince:null,fuelLog:[]};
  tripPath=[]; polylineReset(tripPolyline,tripMapProvider); markerRemove(tripMarker,tripMapProvider); tripMarker=null;
+ if(meterKind==='trip') meterMapReset();
  tripStandbyMovingSince=null; tripStandbyLastPoint=null;
  document.getElementById('startTrip').disabled=true;document.getElementById('stopTrip').disabled=false;document.getElementById('tripPauseBtn').disabled=false;
  syncTripPauseButton();
@@ -1247,7 +1347,7 @@ function tripGpsTick(pos){
  document.getElementById('tripFuel').textContent=fuel.toFixed(2);
  document.getElementById('tripCost').textContent=money(cost);
  document.getElementById('gpsInfo').textContent=`Lat ${p.lat.toFixed(5)} • Lon ${p.lon.toFixed(5)} • ±${Math.round(p.acc)}m`;
- updateTripMeter(speedKmh);
+ updateTripMeter(speedKmh,p.acc);
  // Failsafe: if left paused for too long (forgot to press Stop), auto-save & finish so the trip is never lost.
  if(trip.paused && trip.idleSince && (Date.now()-trip.idleSince)>AUTO_STOP_IDLE_MS){ finishTrip('idle'); return; }
  // Periodic snapshot to localStorage so a closed tab/crash never loses progress.
@@ -1351,6 +1451,7 @@ let walkStandbyMovingSince=null, walkStandbyLastPoint=null, lastWalkAutosave=0;
 function startWalkInternal(auto){
  walk={running:true,paused:false,pausedManually:false,points:[],km:0,steps:0,calories:0,movingMs:0,maxSpeed:0,lastMoveAt:Date.now(),idleSince:null};
  walkPath=[]; polylineReset(walkPolyline,walkMapProvider); markerRemove(walkMarker,walkMapProvider); walkMarker=null;
+ if(meterKind==='walk') meterMapReset();
  walkStandbyMovingSince=null; walkStandbyLastPoint=null;
  document.getElementById('startWalk').disabled=true;document.getElementById('stopWalk').disabled=false;document.getElementById('walkPauseBtn').disabled=false;
  syncWalkPauseButton();
@@ -1425,7 +1526,7 @@ function walkGpsTick(pos){
  document.getElementById('walkSteps').textContent=Math.round(walk.steps);
  document.getElementById('walkCalories').textContent=Math.round(walk.calories);
  document.getElementById('walkGpsInfo').textContent=`Lat ${p.lat.toFixed(5)} • Lon ${p.lon.toFixed(5)} • ±${Math.round(p.acc)}m`;
- updateWalkMeter(speedKmh);
+ updateWalkMeter(speedKmh,p.acc);
  // Failsafe: if left paused for too long (forgot to press Stop), auto-save & finish so the walk is never lost.
  if(walk.paused && walk.idleSince && (Date.now()-walk.idleSince)>AUTO_STOP_IDLE_MS){ finishWalk('idle'); return; }
  if(Date.now()-lastWalkAutosave>AUTOSAVE_MS){ lastWalkAutosave=Date.now(); autosaveActiveWalk(); }
