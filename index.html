@@ -108,6 +108,29 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 .cat-bar{height:6px;border-radius:4px;background:#eef2f7;overflow:hidden;margin-top:4px}
 .cat-bar>span{display:block;height:100%;border-radius:4px}
 </style>
+
+<style id="meter-context-icons">
+.meter-context-icon{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:1.35em;height:1.35em;margin-right:.28em;vertical-align:-.18em;
+  border-radius:50%;font-size:.92em;line-height:1;
+}
+.sport-meter-top .meter-context-icon{font-size:1rem;margin-right:.35em}
+.sport-readout-label,.sport-sub span,.meter-stat-label{
+  display:flex;align-items:center;justify-content:center;gap:.2rem;
+}
+.meter-icon-title{display:inline-flex;align-items:center;gap:.35rem}
+.meter-icon-title i,.sport-readout-label i,.sport-sub span i,.meter-stat-label i{
+  opacity:.9;
+}
+.night-meter-mode .meter-context-icon,
+.night-meter-mode .meter-icon-title i,
+.night-meter-mode .sport-readout-label i,
+.night-meter-mode .sport-sub span i,
+.night-meter-mode .meter-stat-label i{
+  filter:drop-shadow(0 0 5px currentColor);
+}
+</style>
 <style id="night-meter-effects">
 /* Adaptive night illumination for the live vehicle meter */
 #liveMeterModal.night-meter-mode .modal-content,
@@ -444,7 +467,7 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
     <div class="sport-meter-shell">
      <div class="sport-meter-top">
       <span class="sport-meter-brand">SRD DRIVELEDGER • SPORT CLUSTER</span>
-      <span id="meterGear" class="sport-meter-gear">READY</span>
+      <span id="meterGear" class="sport-meter-gear"><i id="meterVehicleIcon" class="bi bi-speedometer2 meter-context-icon"></i><span id="meterGearText">READY</span></span>
      </div>
      <div class="mb-1"><span id="meterStatusBadge" class="badge text-bg-success">Tracking</span> <span class="meter-night-indicator" id="meterNightIndicator"><i class="bi bi-moon-stars-fill"></i> Night</span></div>
      <div class="sport-dial">
@@ -458,22 +481,22 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
      </div>
      <div id="meterLeds" class="sport-led-row"></div>
      <div class="sport-readouts">
-      <div class="sport-readout"><div class="sport-readout-label">ODO</div><div class="sport-readout-value" id="meterOdo">0.0 km</div></div>
-      <div class="sport-readout"><div class="sport-readout-label">Trip</div><div class="sport-readout-value" id="meterTrip">0.00 km</div></div>
-      <div class="sport-readout"><div class="sport-readout-label">Avg</div><div class="sport-readout-value" id="meterAvg">0.0 km/h</div></div>
-      <div class="sport-readout"><div class="sport-readout-label">Max</div><div class="sport-readout-value" id="meterMax">0.0 km/h</div></div>
+      <div class="sport-readout"><div class="sport-readout-label"><i class="bi bi-speedometer2"></i> ODO</div><div class="sport-readout-value" id="meterOdo">0.0 km</div></div>
+      <div class="sport-readout"><div class="sport-readout-label"><i class="bi bi-signpost-split"></i> Trip</div><div class="sport-readout-value" id="meterTrip">0.00 km</div></div>
+      <div class="sport-readout"><div class="sport-readout-label"><i class="bi bi-activity"></i> Avg</div><div class="sport-readout-value" id="meterAvg">0.0 km/h</div></div>
+      <div class="sport-readout"><div class="sport-readout-label"><i class="bi bi-graph-up-arrow"></i> Max</div><div class="sport-readout-value" id="meterMax">0.0 km/h</div></div>
      </div>
      <div class="sport-subgrid">
-      <div class="sport-sub"><b id="meterMileage">--</b><span>Live Mileage</span><div class="sport-eco"><i id="meterEcoBar"></i></div></div>
-      <div class="sport-sub"><b id="meterFuel">--</b><span>Fuel Used</span></div>
-      <div class="sport-sub"><b id="meterRange">--</b><span>Est. Range</span></div>
+      <div class="sport-sub"><b id="meterMileage">--</b><span><i class="bi bi-speedometer"></i> Live Mileage</span><div class="sport-eco"><i id="meterEcoBar"></i></div></div>
+      <div class="sport-sub"><b id="meterFuel">--</b><span><i class="bi bi-fuel-pump"></i> Fuel Used</span></div>
+      <div class="sport-sub"><b id="meterRange">--</b><span><i class="bi bi-signpost"></i> Est. Range</span></div>
      </div>
      <div id="meterMap"></div>
      <div class="row g-2 mt-2 meter-stats mx-0">
-      <div class="col-3"><div class="meter-stat-label">Time</div><div class="meter-stat-val" id="meterTime">00:00</div></div>
-      <div class="col-3"><div class="meter-stat-label">RPM</div><div class="meter-stat-val" id="meterRpm">0</div></div>
-      <div class="col-3"><div class="meter-stat-label">Fuel Cost</div><div class="meter-stat-val" id="meterCost">--</div></div>
-      <div class="col-3"><div class="meter-stat-label">GPS Accuracy</div><div class="meter-stat-val" id="meterVal8">--</div></div>
+      <div class="col-3"><div class="meter-stat-label"><i class="bi bi-stopwatch"></i> Time</div><div class="meter-stat-val" id="meterTime">00:00</div></div>
+      <div class="col-3"><div class="meter-stat-label"><i class="bi bi-arrow-repeat"></i> RPM</div><div class="meter-stat-val" id="meterRpm">0</div></div>
+      <div class="col-3"><div class="meter-stat-label"><i class="bi bi-currency-rupee"></i> Fuel Cost</div><div class="meter-stat-val" id="meterCost">--</div></div>
+      <div class="col-3"><div class="meter-stat-label"><i class="bi bi-geo-alt"></i> GPS Accuracy</div><div class="meter-stat-val" id="meterVal8">--</div></div>
      </div>
      <!-- Existing IDs retained for compatibility with the current application logic. -->
      <span id="meterDistance" class="d-none"></span>
@@ -1233,10 +1256,30 @@ function estimatedOdometer(v,tripKm){
  const base=Number(v.odometer||0), historical=state.trips.filter(t=>String(t.vehicleId)===String(v.id)).reduce((s,t)=>s+Number(t.km||0),0);
  return base+historical+Number(tripKm||0);
 }
+
+const VEHICLE_METER_ICON={
+ 'Two Wheeler':'bi-bicycle',
+ 'Three Wheeler':'bi-truck-front-fill',
+ 'Car':'bi-car-front-fill',
+ 'Pickup':'bi-truck-front',
+ 'Truck':'bi-truck',
+ 'Bus':'bi-bus-front-fill',
+ 'Other':'bi-speedometer2'
+};
+function setMeterVehicleIcon(v){
+ const el=document.getElementById('meterVehicleIcon');
+ if(!el) return;
+ const cls=VEHICLE_METER_ICON[v?.type]||VEHICLE_METER_ICON.Other;
+ el.className='bi '+cls+' meter-context-icon';
+ el.title=v?.type||'Vehicle';
+}
 function updateSportGear(speedKmh,v){
  const type=v?.type||'Car';let gear='N';
  if(speedKmh>2)gear=type==='Two Wheeler'?'1':speedKmh<18?'1':speedKmh<35?'2':speedKmh<55?'3':speedKmh<80?'4':speedKmh<110?'5':'6';
- const gp=document.getElementById('meterGearPill'),gt=document.getElementById('meterGear');if(gp)gp.textContent=gear;if(gt)gt.textContent=`${type.toUpperCase()} • GEAR ${gear}`;
+ setMeterVehicleIcon(v);
+ const gp=document.getElementById('meterGearPill'),gt=document.getElementById('meterGear'),tx=document.getElementById('meterGearText');
+ if(gp)gp.innerHTML='<i class="bi bi-gear-fill"></i> '+gear;
+ if(tx)tx.textContent=`${type.toUpperCase()} • GEAR ${gear}`;else if(gt)gt.textContent=`${type.toUpperCase()} • GEAR ${gear}`;
 }
 function updateMeterGauge(speed,maxSpeed,rpm,rpmMax){
  const pct=Math.max(0,Math.min(1,(Number(speed)||0)/maxSpeed)),rp=Math.max(0,Math.min(1,(Number(rpm)||0)/rpmMax));
@@ -1260,13 +1303,16 @@ function openLiveMeter(kind){
  if(switchingKind) meterMapReset();
  if(kind==='trip'){
    const v=vehicle(document.getElementById('tripVehicle').value);
+   setMeterVehicleIcon(v);
    title.innerHTML=`<i class="bi bi-speedometer2 me-2"></i>${v?.name||'Trip'} • Live Meter`;
    l4.textContent='Live Mileage'; l6.textContent='Fuel Used'; l7.textContent='Fuel Cost';
    buildMeterGauge();
    setMeterStatus(trip.paused);
    updateTripMeter(0,trip.points.at(-1)?.acc);
- } else {
-   title.innerHTML='<i class="bi bi-speedometer2 me-2"></i>Walk • Live Meter';
+  } else {
+   const walkIcon=document.getElementById('meterVehicleIcon');
+   if(walkIcon) walkIcon.className='bi bi-person-walking meter-context-icon';
+   title.innerHTML='<i class="bi bi-person-walking me-2"></i>Walk • Live Meter';
    l4.textContent='Steps'; l6.textContent='Calories'; l7.textContent='Avg Pace';
    buildMeterGauge();
    setMeterStatus(walk.paused);
