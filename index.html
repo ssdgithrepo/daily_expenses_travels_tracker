@@ -57,6 +57,19 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 .paused-banner{background:#fff7ed;border:1px solid #fdba74;color:#9a3412;border-radius:12px;padding:.6rem .9rem;font-size:.85rem}
 .fuel-log-item{font-size:.82rem;border-bottom:1px dashed #e2e8f0;padding:.3rem 0}
 .hidden-mode{display:none!important}
+/* Full-screen live meter */
+#liveMeterModal.meter-fullscreen-host{padding:0!important}
+#liveMeterModal.meter-fullscreen-host .modal-dialog{width:100vw;max-width:none;height:100vh;margin:0}
+#liveMeterModal.meter-fullscreen-host .meter-modal-content{height:100vh;border-radius:0;display:flex;flex-direction:column}
+#liveMeterModal.meter-fullscreen-host .modal-body{overflow:auto;flex:1}
+.meter-fullscreen-btn{min-width:42px}
+.meter-background-status{font-size:.68rem;color:#94a3b8;display:inline-flex;align-items:center;gap:.3rem}
+.meter-range-source{font-size:.62rem;color:#94a3b8;margin-top:.15rem}
+@media(max-width:576px){
+ #liveMeterModal.meter-fullscreen-host .modal-body{padding-left:.45rem!important;padding-right:.45rem!important}
+ .meter-fullscreen-btn .btn-label{display:none}
+}
+
 /* ---------- Enhanced sports vehicle meter (additive layer) ---------- */
 .sport-meter-shell{position:relative;margin:0 auto;padding:10px 8px 4px;max-width:720px}
 .sport-meter-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:2px}
@@ -75,6 +88,15 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 .sport-dial .speed-needle{transform-origin:100px 110px;transition:transform .18s cubic-bezier(.2,.8,.2,1)}
 .sport-dial .rpm-needle{transform-origin:100px 110px;transition:transform .22s cubic-bezier(.2,.8,.2,1)}
 .sport-dial .needle{stroke:#f8fafc;stroke-width:2.8;stroke-linecap:round;filter:url(#sportGlow)}
+/* Realistic analog instrument needles: tapered, layered, counterbalanced and softly illuminated. */
+.sport-dial .needle-shadow,.sport-dial .rpm-needle-shadow{fill:rgba(0,0,0,.55);filter:url(#sportGlow)}
+.sport-dial .needle-face{fill:#f8fafc;filter:url(#sportGlow)}
+.sport-dial .rpm-needle-face{fill:#fb7185;filter:url(#sportGlow)}
+.sport-dial .hub-outer{fill:#020617;stroke:#94a3b8;stroke-width:1.5;filter:url(#sportGlow)}
+.sport-dial .hub{fill:#e2e8f0;stroke:#020617;stroke-width:1.5}
+.sport-dial .hub-cap{fill:#60a5fa;filter:url(#sportGlow)}
+@media (prefers-reduced-motion:reduce){.speed-needle,.sport-dial .rpm-needle{transition:none!important}}
+
 .sport-dial .needle-red{stroke:#fb7185;stroke-width:2;stroke-linecap:round;filter:url(#sportGlow)}
 .sport-dial .hub{fill:#0f172a;stroke:#e2e8f0;stroke-width:2}
 .sport-digital{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);text-align:center;line-height:1}
@@ -461,7 +483,7 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
   <div class="modal-content meter-modal-content">
    <div class="modal-header border-0 pb-0">
     <h5 class="modal-title mb-0" id="meterTitle"><i class="bi bi-speedometer2 me-2"></i>Live Meter</h5>
-    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    <div class="d-flex align-items-center gap-2"><button type="button" class="btn btn-sm btn-outline-light meter-fullscreen-btn" id="meterFullscreenBtn" onclick="toggleMeterFullscreen()" title="Show meter full screen"><i class="bi bi-fullscreen"></i> <span class="btn-label">Full Screen</span></button><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close meter"></button></div>
    </div>
    <div class="modal-body text-center pt-2">
     <div class="sport-meter-shell">
@@ -506,7 +528,7 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
    </div>
    <div class="modal-footer border-0 justify-content-center gap-2 pt-0">
     <button class="btn btn-warning" id="meterPauseBtn" onclick="toggleMeterPause()"><i class="bi bi-pause-fill"></i> Pause</button>
-    <button class="btn btn-danger" id="meterStopBtn" onclick="stopFromMeter()"><i class="bi bi-stop-fill"></i> Stop &amp; Save</button><div class="w-100 small text-secondary text-center mt-1">RPM is a speed/GPS-based estimate; true engine RPM requires OBD/CAN data. *Range uses configured tank capacity.</div>
+    <button class="btn btn-danger" id="meterStopBtn" onclick="stopFromMeter()"><i class="bi bi-stop-fill"></i> Stop &amp; Save</button><div class="w-100 small text-secondary text-center mt-1">RPM is a speed/GPS-based estimate; true engine RPM requires OBD/CAN data. Range is calculated automatically from recorded fuel expenses, vehicle mileage and tracked distance.</div><div class="w-100 meter-background-status justify-content-center mt-1"><i class="bi bi-broadcast-pin"></i> Background tracking: best-effort browser/OS support • screen wake lock active when supported</div>
    </div>
   </div>
  </div>
@@ -727,7 +749,7 @@ function addWalker(){const w={id:Date.now(),name:document.getElementById('wName'
 function delWalker(id){if(confirm('Delete this walking profile?')){const wasActive=state.walkers.find(w=>w.id===id)?.active;state.walkers=state.walkers.filter(w=>w.id!==id);if(wasActive&&state.walkers.length)state.walkers[0].active=true;persist();renderAll()}}
 function setActiveWalker(id){state.walkers.forEach(w=>w.active=(w.id===id));persist();renderAll()}
 function activeWalker(){return (state.walkers||[]).find(w=>w.active)||(state.walkers||[])[0]}
-function addExpense(){const e={id:Date.now(),date:document.getElementById('eDate').value||new Date().toISOString().slice(0,10),cat:document.getElementById('eCat').value,vehicleId:document.getElementById('eVehicle').value,note:document.getElementById('eNote').value,payment:document.getElementById('ePayment').value,amount:Number(document.getElementById('eAmount').value)};if(!e.amount)return alert('Enter amount.');state.expenses.push(e);persist();bootstrap.Modal.getInstance(document.getElementById('expenseModal')).hide();document.getElementById('eAmount').value='';document.getElementById('eNote').value='';document.getElementById('eDate').value=new Date().toISOString().slice(0,10);renderAll()}
+function addExpense(){const e={id:Date.now(),date:document.getElementById('eDate').value||new Date().toISOString().slice(0,10),cat:document.getElementById('eCat').value,vehicleId:document.getElementById('eVehicle').value,note:document.getElementById('eNote').value,payment:document.getElementById('ePayment').value,amount:Number(document.getElementById('eAmount').value)};if(!e.amount)return alert('Enter amount.');const ev=vehicle(e.vehicleId);if(String(e.cat).toLowerCase()==='fuel'&&ev){e.fuelRateAtEntry=Number(ev.rate)||Number(state.settings.rate)||0;e.liters=e.fuelRateAtEntry>0?Number((e.amount/e.fuelRateAtEntry).toFixed(3)):0;}state.expenses.push(e);persist();bootstrap.Modal.getInstance(document.getElementById('expenseModal')).hide();document.getElementById('eAmount').value='';document.getElementById('eNote').value='';document.getElementById('eDate').value=new Date().toISOString().slice(0,10);renderAll();if(meterModalOpen&&meterKind==='trip')updateTripMeter(trip.points.at(-1)?.speed||0,trip.points.at(-1)?.acc)}
 function delExpense(id){state.expenses=state.expenses.filter(e=>e.id!==id);persist();renderAll()}
 let gpsPermission='not-requested';
 let locationConsent=false;
@@ -1238,8 +1260,8 @@ function buildMeterGauge(){
  h+=`<path class="rpm-track" d="${arcPath(67,8,172)}"/><path id="meterRpmArc" class="rpm-progress" d="${arcPath(67,8,172)}"/>`;
  for(let i=0;i<=12;i++){const d=i*15,p1=point(d,72),p2=point(d,i%2===0?78:75);h+=`<line class="dial-tick ${i%2===0?'major':''}" x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"/>`;if(i%2===0){const n=point(d,61);h+=`<text class="dial-number" x="${n.x}" y="${n.y+2}">${i*20}</text>`;}}
  for(let i=0;i<=8;i++){const d=8+i*20.5,p1=point(d,61),p2=point(d,64);h+=`<line class="dial-tick" x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"/>`;const n=point(d,55);h+=`<text class="rpm-number" x="${n.x}" y="${n.y+1.5}">${i}</text>`;}
- h+=`<g id="meterNeedle" class="speed-needle" transform="rotate(-90 100 110)"><line class="needle" x1="100" y1="110" x2="100" y2="38"/></g>`;
- h+=`<g id="meterRpmNeedle" class="rpm-needle" transform="rotate(-90 100 110)"><line class="needle-red" x1="100" y1="110" x2="100" y2="49"/></g><circle class="hub" cx="100" cy="110" r="7"/>`;
+ h+=`<g id="meterNeedle" class="speed-needle" transform="rotate(-90 100 110)"><polygon class="needle-shadow" points="96.9,108.2 99.1,109.2 99.1,43 100,34 100.9,43 100.9,109.2 103.1,108.2 101.2,111 98.8,111"/><polygon class="needle-face" points="98.4,108.8 99.2,109.5 99.2,42 100,35 100.8,42 100.8,109.5 101.6,108.8 100,112"/></g>`;
+ h+=`<g id="meterRpmNeedle" class="rpm-needle" transform="rotate(-90 100 110)"><polygon class="rpm-needle-shadow" points="97.5,108.8 99.2,109.5 99.2,53 100,47 100.8,53 100.8,109.5 102.5,108.8 101.2,112 98.8,112"/><polygon class="rpm-needle-face" points="98.7,109 99.3,109.5 99.3,53 100,48 100.7,53 100.7,109.5 101.3,109 100,112"/></g><circle class="hub-outer" cx="100" cy="110" r="8.5"/><circle class="hub" cx="100" cy="110" r="5.5"/><circle class="hub-cap" cx="100" cy="110" r="2"/>`;
  svg.innerHTML=h;
  const a=document.getElementById('meterValueArc'),ra=document.getElementById('meterRpmArc');meterArcLen=a?.getTotalLength()||0;meterRpmArcLen=ra?.getTotalLength()||0;
  if(a)a.style.strokeDasharray=`${meterArcLen} ${meterArcLen}`;
@@ -1255,6 +1277,27 @@ function estimatedOdometer(v,tripKm){
  if(!v)return 0;
  const base=Number(v.odometer||0), historical=state.trips.filter(t=>String(t.vehicleId)===String(v.id)).reduce((s,t)=>s+Number(t.km||0),0);
  return base+historical+Number(tripKm||0);
+}
+
+function estimatedFuelRange(v,currentTripKm=0){
+ if(!v || !Number(v.mileage) || Number(v.mileage)<=0) return {available:false,km:0,liters:0,spent:0};
+ const rate=Number(v.rate)||0;
+ const expenses=(state.expenses||[]).filter(e=>String(e.vehicleId)===String(v.id) && String(e.cat||'').toLowerCase()==='fuel');
+ let liters=0,spent=0;
+ expenses.forEach(e=>{
+   const amount=Number(e.amount)||0;
+   const entryRate=Number(e.fuelRateAtEntry)||rate;
+   const entryLiters=Number(e.liters);
+   if(entryLiters>0) liters+=entryLiters;
+   else if(entryRate>0) liters+=amount/entryRate;
+   spent+=amount;
+ });
+ // Mid-trip fuel is already written to state.expenses, so do not add trip.fuelLog again.
+ const historicalKm=state.trips.filter(t=>String(t.vehicleId)===String(v.id)).reduce((sum,t)=>sum+Number(t.km||0),0);
+ const consumedKm=historicalKm+Number(currentTripKm||0);
+ const theoreticalKm=liters*Number(v.mileage);
+ const remaining=Math.max(0,theoreticalKm-consumedKm);
+ return {available:liters>0,km:remaining,liters,spent};
 }
 
 const VEHICLE_METER_ICON={
@@ -1320,6 +1363,27 @@ function openLiveMeter(kind){
  }
  bootstrap.Modal.getOrCreateInstance(document.getElementById('liveMeterModal')).show();
 }
+
+async function toggleMeterFullscreen(){
+ const modal=document.getElementById('liveMeterModal');
+ try{
+   if(document.fullscreenElement){await document.exitFullscreen();return;}
+   if(modal.requestFullscreen){await modal.requestFullscreen();}
+   else {modal.classList.add('meter-fullscreen-host');}
+ }catch(e){modal.classList.toggle('meter-fullscreen-host');}
+}
+document.addEventListener('fullscreenchange',()=>{
+ const modal=document.getElementById('liveMeterModal'),btn=document.getElementById('meterFullscreenBtn');
+ const full=!!document.fullscreenElement;
+ modal.classList.toggle('meter-fullscreen-host',full);
+ if(btn)btn.innerHTML=full?'<i class="bi bi-fullscreen-exit"></i> <span class="btn-label">Exit Full Screen</span>':'<i class="bi bi-fullscreen"></i> <span class="btn-label">Full Screen</span>';
+ if(full)setTimeout(()=>mapResize(meterMap,meterMapProvider),150);
+});
+document.getElementById('liveMeterModal').addEventListener('hidden.bs.modal',async()=>{
+ if(document.fullscreenElement){try{await document.exitFullscreen()}catch(e){}}
+ document.getElementById('liveMeterModal').classList.remove('meter-fullscreen-host');
+});
+
 function updateTripMeter(speedKmh,accuracy){
  if(meterKind!=='trip')return;
  const v=vehicle(document.getElementById('tripVehicle').value),meta=VEHICLE_GAUGE_META[v?.type]||VEHICLE_GAUGE_META.Other;
@@ -1328,7 +1392,7 @@ function updateTripMeter(speedKmh,accuracy){
  document.getElementById('meterDistance').textContent=trip.km.toFixed(2)+' km';document.getElementById('meterTrip').textContent=trip.km.toFixed(2)+' km';document.getElementById('meterOdo').textContent=estimatedOdometer(v,trip.km).toFixed(1)+' km';
  document.getElementById('meterTime').textContent=fmtTime(trip.movingMs);const avg=trip.movingMs>0?trip.km/(trip.movingMs/3600000):0;document.getElementById('meterAvg').textContent=avg.toFixed(1)+' km/h';document.getElementById('meterMax').textContent=(trip.maxSpeed||0).toFixed(1)+' km/h';
  const live=v?estimateLiveMileage(v,speedKmh):0,fuel=v?trip.km/Number(v.mileage):0,cost=v?fuel*Number(v.rate):0;document.getElementById('meterVal4').textContent=v?live.toFixed(1)+' km/L':'--';document.getElementById('meterMileage').textContent=v?live.toFixed(1)+' km/L':'--';document.getElementById('meterVal6').textContent=v?fuel.toFixed(2)+' L':'--';document.getElementById('meterFuel').textContent=v?fuel.toFixed(2)+' L':'--';document.getElementById('meterVal7').textContent=v?money(cost):'--';document.getElementById('meterCost').textContent=v?money(cost):'--';
- const range=v&&live>0?Number(v.tankCapacity||0)*live:0;document.getElementById('meterRange').textContent=v?(range?range.toFixed(0)+' km':'--'):'--';document.getElementById('meterEcoBar').style.width=Math.max(0,Math.min(100,(live/(Number(v?.mileage||1)*1.15))*100))+'%';document.getElementById('meterVal8').textContent=accuracy?'±'+Math.round(accuracy)+' m':'--';
+ const range=estimatedFuelRange(v,trip.km);document.getElementById('meterRange').textContent=v?(range.available?range.km.toFixed(0)+' km':'--'):'--';document.getElementById('meterEcoBar').style.width=Math.max(0,Math.min(100,(live/(Number(v?.mileage||1)*1.15))*100))+'%';document.getElementById('meterVal8').textContent=accuracy?'±'+Math.round(accuracy)+' m':'--';
  updateSportGear(speedKmh,v);setMeterStatus(trip.paused);
  if(meterModalOpen){const vv=v,cfg=VEHICLE_ICON_MAP[vv?.type]||VEHICLE_ICON_MAP.Other,last=trip.points.at(-1);if(last)meterMapUpdate(last,cfg);}
 }
@@ -1400,12 +1464,12 @@ function releaseWakeLock(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null
 document.addEventListener('visibilitychange',()=>{
  if(document.visibilityState==='visible' && (trip.running||walk.running)) requestWakeLock();
  if(document.visibilityState==='hidden'){
-   // Save right away — background timers can be throttled or the tab can be
-   // suspended/killed by the OS at any moment once it's out of view.
+   // Persist immediately before the browser/OS may throttle or suspend this page.
    if(trip.running) autosaveActiveTrip();
    if(walk.running) autosaveActiveWalk();
  }
 });
+window.addEventListener('pagehide',()=>{if(trip.running)autosaveActiveTrip();if(walk.running)autosaveActiveWalk();});
 
 function fmtTime(ms){ const s=Math.floor(ms/1000); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
 
@@ -1549,7 +1613,7 @@ document.getElementById('addFuelBtn').onclick=()=>{
  renderFuelLog();
  // Log it immediately as an expense too, so dashboards/reports reflect it right away.
  const v=vehicle(document.getElementById('tripVehicle').value);
- state.expenses.push({id:Date.now(),date:new Date().toISOString().slice(0,10),cat:'Fuel',vehicleId:v?.id||'',note:'Mid-trip fuel top-up',payment:'Cash',amount:cost});
+ state.expenses.push({id:Date.now(),date:new Date().toISOString().slice(0,10),cat:'Fuel',vehicleId:v?.id||'',note:'Mid-trip fuel top-up',payment:'Cash',amount:cost,fuelRateAtEntry:v?Number(v.rate)||0:0,liters:Number(liters)||0});
  persist();
 };
 
