@@ -100,10 +100,10 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 .sport-dial .needle-red{stroke:#fb7185;stroke-width:2;stroke-linecap:round;filter:url(#sportGlow)}
 .sport-dial .hub{fill:#0f172a;stroke:#e2e8f0;stroke-width:2}
 .sport-digital{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);text-align:center;line-height:1}
-.sport-digital-speed{font-family:'Courier New',monospace;font-size:clamp(2.2rem,8vw,4.1rem);font-weight:900;letter-spacing:2px;text-shadow:0 0 18px rgba(96,165,250,.5)}
+.sport-digital-speed{font-family:'Courier New',monospace;font-size:clamp(2.2rem,8vw,4.1rem);font-weight:900;letter-spacing:2px;text-shadow:0 0 18px var(--mode-color,rgba(96,165,250,.5))}
 .sport-digital-unit{font-size:.68rem;letter-spacing:2px;opacity:.55;font-weight:800}
 .sport-rpm-live{font-family:'Courier New',monospace;font-size:.72rem;letter-spacing:1px;color:#fb7185;font-weight:800;margin-top:6px}
-.sport-gear-pill{position:absolute;right:14%;bottom:10%;min-width:35px;height:35px;border-radius:9px;border:1px solid rgba(255,255,255,.12);background:#020617;display:flex;align-items:center;justify-content:center;font-weight:900;color:#f8fafc;box-shadow:0 0 18px rgba(59,130,246,.18)}
+.sport-gear-pill{position:absolute;right:14%;bottom:10%;min-width:35px;height:35px;border-radius:9px;border:1px solid rgba(255,255,255,.12);background:#020617;display:flex;align-items:center;justify-content:center;font-weight:900;color:#f8fafc;box-shadow:0 0 18px var(--mode-glow,rgba(59,130,246,.18))}
 .sport-led-row{display:flex;justify-content:center;gap:3px;margin:-4px auto 5px;max-width:360px}
 .sport-led{height:5px;flex:1;border-radius:8px;background:#1e293b;transition:all .15s ease}
 .sport-led.active{box-shadow:0 0 9px currentColor}
@@ -117,13 +117,15 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 .sport-sub span{font-size:.52rem;text-transform:uppercase;letter-spacing:.5px;color:#64748b}
 .sport-eco{height:5px;border-radius:8px;background:#1e293b;overflow:hidden;margin-top:4px}
 .sport-eco>i{display:block;height:100%;width:0;border-radius:8px;transition:width .25s ease}
-.sport-gear-shift{position:absolute;left:4%;bottom:8%;display:flex;flex-direction:column;gap:4px;z-index:2}
-.sport-gear-shift button{width:30px;height:24px;font-size:.7rem;padding:0;line-height:1;display:flex;align-items:center;justify-content:center}
-.sport-gear-pill{transition:box-shadow .2s ease,border-color .2s ease}
-.sport-gear-pill.gear-alert{border-color:#ef4444!important;animation:gearPillPulse .8s ease-in-out infinite}
-@keyframes gearPillPulse{0%,100%{box-shadow:0 0 10px rgba(239,68,68,.55)}50%{box-shadow:0 0 20px rgba(239,68,68,.95)}}
-.meter-gear-warning{background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.55);color:#fecaca;border-radius:10px;font-size:.74rem;font-weight:700;padding:.35rem .6rem;margin:0 auto 6px;max-width:360px}
-@media (prefers-reduced-motion:reduce){.sport-gear-pill.gear-alert{animation:none}}
+.sport-gear-pill{transition:box-shadow .2s ease,transform .2s ease}
+.sport-gear-pill.gear-shift-flash{animation:gearShiftFlash .4s ease}
+@keyframes gearShiftFlash{0%{transform:scale(1.22);box-shadow:0 0 24px var(--mode-glow,rgba(96,165,250,.85))}100%{transform:scale(1);box-shadow:0 0 18px var(--mode-glow,rgba(59,130,246,.18))}}
+@media (prefers-reduced-motion:reduce){.sport-gear-pill.gear-shift-flash{animation:none}}
+.sport-mode-row{display:flex;justify-content:center;gap:14px;margin:1px 0 5px}
+.sport-mode-light{display:flex;flex-direction:column;align-items:center;gap:1px;font-size:.55rem;letter-spacing:.05em;font-weight:800;color:#475569;opacity:.4;transition:opacity .2s ease,filter .2s ease;cursor:pointer;user-select:none}
+.sport-mode-light i{font-size:.95rem}
+.sport-mode-light.active{opacity:1;color:var(--mode-color,#60a5fa);filter:drop-shadow(0 0 6px var(--mode-color,#60a5fa))}
+.sport-mode-light:hover{opacity:.75}
 @media(max-width:575.98px){
  .sport-meter-shell{padding-left:0;padding-right:0}
  .sport-readouts{grid-template-columns:repeat(2,1fr)}
@@ -527,7 +529,7 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
       <span id="meterGear" class="sport-meter-gear"><i id="meterVehicleIcon" class="bi bi-speedometer2 meter-context-icon"></i><span id="meterGearText">READY</span></span>
      </div>
      <div class="mb-1"><span id="meterStatusBadge" class="badge text-bg-success">Tracking</span> <span class="meter-night-indicator" id="meterNightIndicator"><i class="bi bi-moon-stars-fill"></i> Night</span></div>
-     <div id="meterGearWarning" class="meter-gear-warning d-none"><i class="bi bi-exclamation-triangle-fill"></i> <span id="meterGearWarningText"></span></div>
+     <div id="meterModeRow" class="sport-mode-row d-none"></div>
      <div class="sport-dial">
       <svg id="meterGaugeSvg" viewBox="0 0 200 128" aria-label="Animated vehicle speedometer and RPM gauge"></svg>
       <div class="sport-digital">
@@ -535,12 +537,9 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
        <div class="sport-digital-unit">KM/H</div>
        <div id="meterRpmLive" class="sport-rpm-live">0 RPM</div>
       </div>
-      <div id="meterGearPill" class="sport-gear-pill" title="Current gear">N</div>
-      <div id="meterGearShift" class="sport-gear-shift d-none">
-       <button type="button" class="btn btn-sm btn-outline-light" onclick="shiftGear(1)" title="Shift up"><i class="bi bi-caret-up-fill"></i></button>
-       <button type="button" class="btn btn-sm btn-outline-light" onclick="shiftGear(-1)" title="Shift down"><i class="bi bi-caret-down-fill"></i></button>
-      </div>
+      <div id="meterGearPill" class="sport-gear-pill" title="Automatic gear — shifts with speed">N</div>
      </div>
+     <div class="w-100 small text-secondary text-center" style="font-size:.62rem;opacity:.75">Automatic transmission — gear shifts on its own as speed changes. Tap a drive mode above to change shift behaviour.</div>
      <div id="meterLeds" class="sport-led-row"></div>
      <div class="sport-readouts">
       <div class="sport-readout"><div class="sport-readout-label"><i class="bi bi-speedometer2"></i> ODO</div><div class="sport-readout-value" id="meterOdo">0.0 km</div></div>
@@ -1364,13 +1363,12 @@ function setMeterVehicleIcon(v){
  el.className='bi '+cls+' meter-context-icon';
  el.title=v?.type||'Vehicle';
 }
-/* ---------- Manual-gear simulation ----------
-   The gauge no longer just displays an auto-guessed gear: the driver shifts gears with the
-   ▲/▼ shifter next to the dial (like a real manual vehicle), and the app compares that chosen
-   gear against the gear the vehicle's current speed actually calls for. If they don't match,
-   a warning banner + pulsing gear pill + one-time toast tell the driver to shift. */
-const GEAR_ORDER=['N','1','2','3','4','5','6'];
-let currentGear='N', gearMismatch=false;
+/* ---------- Automatic transmission + drive-mode simulation ----------
+   The gearbox now shifts on its own, purely as a function of current speed and vehicle type —
+   no manual shifting. A tappable row of drive-mode telltales (Eco/Normal/Sport/Power, varying
+   by vehicle type) changes how eagerly the transmission shifts, the way a real vehicle's drive
+   mode selector does, and lights up with that mode's colour across the cluster. */
+let currentGear='N';
 // Upper speed (km/h) bound for gear 1, gear 2, gear 3... per vehicle type (last entry's gear is the top gear).
 const GEAR_SPEED_BOUNDS={
  'Two Wheeler':[15,30,45,65,90],
@@ -1381,59 +1379,78 @@ const GEAR_SPEED_BOUNDS={
  'Bus':[10,18,28,42,58],
  'Other':[18,35,55,80,110]
 };
+const DRIVE_MODES={
+ eco:{label:'ECO',icon:'bi-leaf-fill',color:'#22c55e',shiftMul:0.8},
+ normal:{label:'NORMAL',icon:'bi-speedometer2',color:'#60a5fa',shiftMul:1},
+ sport:{label:'SPORT',icon:'bi-lightning-charge-fill',color:'#fb7185',shiftMul:1.28},
+ power:{label:'POWER',icon:'bi-lightning-charge-fill',color:'#f59e0b',shiftMul:1.18}
+};
+// Which drive modes exist for each vehicle type — heavy vehicles get Power instead of Sport.
+const VEHICLE_DRIVE_MODES={
+ 'Two Wheeler':['eco','normal','sport'],
+ 'Three Wheeler':['eco','normal'],
+ 'Car':['eco','normal','sport'],
+ 'Pickup':['eco','normal','sport'],
+ 'Truck':['eco','normal','power'],
+ 'Bus':['eco','normal','power'],
+ 'Other':['eco','normal','sport']
+};
+let driveMode='normal';
+function hexToRgba(hex,alpha){
+ const h=hex.replace('#','');
+ const r=parseInt(h.substring(0,2),16),g=parseInt(h.substring(2,4),16),b=parseInt(h.substring(4,6),16);
+ return `rgba(${r},${g},${b},${alpha})`;
+}
 function recommendedGearFor(speedKmh,type){
  if(!speedKmh||speedKmh<=2) return 'N';
  const bounds=GEAR_SPEED_BOUNDS[type]||GEAR_SPEED_BOUNDS.Other;
- for(let i=0;i<bounds.length;i++){ if(speedKmh<bounds[i]) return String(i+1); }
+ const mul=(DRIVE_MODES[driveMode]||DRIVE_MODES.normal).shiftMul;
+ for(let i=0;i<bounds.length;i++){ if(speedKmh<bounds[i]*mul) return String(i+1); }
  return String(bounds.length+1);
 }
-function resetGear(){
- currentGear='N';gearMismatch=false;
- const gp=document.getElementById('meterGearPill'),warn=document.getElementById('meterGearWarning');
- if(gp)gp.classList.remove('gear-alert');
- if(warn)warn.classList.add('d-none');
+function applyModeAccent(){
+ const shell=document.querySelector('.sport-meter-shell'),d=DRIVE_MODES[driveMode]||DRIVE_MODES.normal;
+ if(shell){ shell.style.setProperty('--mode-color',hexToRgba(d.color,.6)); shell.style.setProperty('--mode-glow',hexToRgba(d.color,.22)); }
 }
-function shiftGear(dir){
- const idx=GEAR_ORDER.indexOf(currentGear);
- const next=Math.max(0,Math.min(GEAR_ORDER.length-1,idx+dir));
- currentGear=GEAR_ORDER[next];
- if(meterKind==='trip'){
-   const v=vehicle(document.getElementById('tripVehicle').value);
-   const lastSpeed=trip.points.at(-1)?.speed||0;
-   updateSportGear(lastSpeed,v);
- }
+function renderDriveModeLights(v){
+ const row=document.getElementById('meterModeRow'); if(!row) return;
+ const type=v?.type||'Car', modes=VEHICLE_DRIVE_MODES[type]||VEHICLE_DRIVE_MODES.Other;
+ if(!modes.includes(driveMode)) driveMode='normal';
+ row.classList.remove('d-none');
+ row.innerHTML=modes.map(m=>{ const d=DRIVE_MODES[m]; return `<div class="sport-mode-light${m===driveMode?' active':''}" style="--mode-color:${d.color}" onclick="cycleDriveModeTo('${m}')"><i class="bi ${d.icon}"></i><span>${d.label}</span></div>`; }).join('');
+ applyModeAccent();
+}
+function cycleDriveModeTo(m){
+ if(m===driveMode||!DRIVE_MODES[m])return;
+ driveMode=m;
+ const v=vehicle(document.getElementById('tripVehicle').value);
+ renderDriveModeLights(v);
+ showGearToast(`${DRIVE_MODES[driveMode].label} mode engaged.`);
+ const lastSpeed=trip.points.at(-1)?.speed||0;
+ updateSportGear(lastSpeed,v);
+}
+function resetGear(){
+ currentGear='N'; driveMode='normal';
+ const gp=document.getElementById('meterGearPill');
+ if(gp){gp.classList.remove('gear-shift-flash');gp.innerHTML='<i class="bi bi-gear-fill"></i> N';}
 }
 function showGearToast(msg){
  const body=document.getElementById('gearToastBody'),toastEl=document.getElementById('gearToast');
  if(body)body.textContent=msg;
- if(toastEl&&window.bootstrap)bootstrap.Toast.getOrCreateInstance(toastEl,{delay:3500}).show();
-}
-function evaluateGearMismatch(speedKmh,recommended,type){
- const gp=document.getElementById('meterGearPill'),warn=document.getElementById('meterGearWarning'),warnTx=document.getElementById('meterGearWarningText');
- const mismatch=speedKmh>2 && currentGear!==recommended;
- if(mismatch){
-   const dir=GEAR_ORDER.indexOf(recommended)>GEAR_ORDER.indexOf(currentGear)?'up':'down';
-   const msg=currentGear==='N'?`Engage gear ${recommended} — you're moving.`:`Shift ${dir} to gear ${recommended} for your current speed.`;
-   if(warnTx)warnTx.textContent=msg;
-   if(warn)warn.classList.remove('d-none');
-   if(gp)gp.classList.add('gear-alert');
-   if(!gearMismatch)showGearToast(msg);
- } else {
-   if(warn)warn.classList.add('d-none');
-   if(gp)gp.classList.remove('gear-alert');
- }
- gearMismatch=mismatch;
+ if(toastEl&&window.bootstrap)bootstrap.Toast.getOrCreateInstance(toastEl,{delay:3000}).show();
 }
 function updateSportGear(speedKmh,v){
  const type=v?.type||'Car';
- const recommended=recommendedGearFor(speedKmh,type);
+ const gear=recommendedGearFor(speedKmh,type);
  setMeterVehicleIcon(v);
- const shiftCtrl=document.getElementById('meterGearShift');
- if(shiftCtrl)shiftCtrl.classList.remove('d-none');
  const gp=document.getElementById('meterGearPill'),tx=document.getElementById('meterGearText');
- if(gp)gp.innerHTML='<i class="bi bi-gear-fill"></i> '+currentGear;
- if(tx)tx.textContent=`${type.toUpperCase()} • GEAR ${currentGear}`;
- evaluateGearMismatch(speedKmh,recommended,type);
+ if(gp){
+   if(gear!==currentGear){ gp.classList.remove('gear-shift-flash'); void gp.offsetWidth; gp.classList.add('gear-shift-flash'); }
+   gp.innerHTML='<i class="bi bi-gear-fill"></i> '+gear;
+ }
+ currentGear=gear;
+ const modeLabel=(DRIVE_MODES[driveMode]||DRIVE_MODES.normal).label;
+ if(tx)tx.textContent=`${type.toUpperCase()} • ${modeLabel} • GEAR ${gear}`;
 }
 let needleAnim={speed:-90,rpm:-90};
 function animateAnalogNeedle(el,target,key){
@@ -1472,6 +1489,7 @@ function openLiveMeter(kind){
    l4.textContent='Live Mileage'; l6.textContent='Fuel Used'; l7.textContent='Fuel Cost';
    buildMeterGauge();
    if(switchingKind)resetGear();
+   renderDriveModeLights(v);
    setMeterStatus(trip.paused);
    updateTripMeter(0,trip.points.at(-1)?.acc);
   } else {
@@ -1480,9 +1498,8 @@ function openLiveMeter(kind){
    title.innerHTML='<i class="bi bi-person-walking me-2"></i>Walk • Live Meter';
    l4.textContent='Steps'; l6.textContent='Calories'; l7.textContent='Avg Pace';
    buildMeterGauge();
-   const shiftCtrl=document.getElementById('meterGearShift'),warn=document.getElementById('meterGearWarning');
-   if(shiftCtrl)shiftCtrl.classList.add('d-none');
-   if(warn)warn.classList.add('d-none');
+   const modeRow=document.getElementById('meterModeRow');
+   if(modeRow){modeRow.classList.add('d-none');modeRow.innerHTML='';}
    setMeterStatus(walk.paused);
    updateWalkMeter(0,walk.points.at(-1)?.acc);
  }
