@@ -494,7 +494,8 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
     <label class="form-label">Distance travelled (KM)</label><input id="manualKmValue" type="number" min="0.01" step="0.01" class="form-control mb-2" placeholder="e.g. 37.5">
     <label class="form-label">Date</label><input id="manualKmDate" type="date" class="form-control mb-2">
     <label class="form-label">Note</label><input id="manualKmNote" class="form-control" placeholder="Forgot to start trip / travelled before GPS start">
-    <div class="manual-km-note mt-2"><i class="bi bi-calculator me-1"></i>Calculations update automatically after saving.</div>
+    <div id="manualKmFuelInfo" class="alert alert-secondary py-2 small mt-2 mb-0"><i class="bi bi-fuel-pump me-1"></i>Latest fuel entry will be linked automatically.</div>
+    <div class="manual-km-note mt-2"><i class="bi bi-calculator me-1"></i>This KM is added to ODO and, when a fuel entry exists, to the distance consumed from that fuel fill.</div>
    </div>
    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" onclick="saveManualKm()"><i class="bi bi-check2-circle me-1"></i>Add KM</button></div>
   </div>
@@ -1271,97 +1272,84 @@ document.getElementById('liveMeterModal').addEventListener('hidden.bs.modal',()=
 
 let meterKind=null, meterArcLen=0;
 function buildMeterGauge(){
- const svg=document.getElementById('meterGaugeSvg'); if(!svg) return;
- const cx=100,cy=110;
- const point=(deg,rad)=>{const a=(deg-180)*Math.PI/180;return{x:cx+rad*Math.cos(a),y:cy+rad*Math.sin(a)}};
- const arcPath=(rad,a1,a2)=>{const s=point(a1,rad),e=point(a2,rad),large=Math.abs(a2-a1)>180?1:0;return`M${s.x.toFixed(2)},${s.y.toFixed(2)} A${rad},${rad} 0 ${large} 1 ${e.x.toFixed(2)},${e.y.toFixed(2)}`};
- let h=`<defs>
- <linearGradient id="sportSpeedGrad" x1="20" y1="0" x2="180" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#22c55e"/><stop offset="62%" stop-color="#60a5fa"/><stop offset="84%" stop-color="#facc15"/><stop offset="100%" stop-color="#ef4444"/></linearGradient>
- <linearGradient id="sportRpmGrad" x1="20" y1="0" x2="180" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#60a5fa"/><stop offset="72%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#fb7185"/></linearGradient>
- <filter id="sportGlow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
- h+=`<path class="dial-track" d="${arcPath(82,0,180)}"/><path id="meterValueArc" class="dial-progress" d="${arcPath(82,0,180)}"/>`;
- h+=`<path class="rpm-track" d="${arcPath(67,8,172)}"/><path id="meterRpmArc" class="rpm-progress" d="${arcPath(67,8,172)}"/>`;
- for(let i=0;i<=12;i++){const d=i*15,p1=point(d,72),p2=point(d,i%2===0?78:75);h+=`<line class="dial-tick ${i%2===0?'major':''}" x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"/>`;if(i%2===0){const n=point(d,61);h+=`<text class="dial-number" x="${n.x}" y="${n.y+2}">${i*20}</text>`;}}
- for(let i=0;i<=8;i++){const d=8+i*20.5,p1=point(d,61),p2=point(d,64);h+=`<line class="dial-tick" x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"/>`;const n=point(d,55);h+=`<text class="rpm-number" x="${n.x}" y="${n.y+1.5}">${i}</text>`;}
- h+=`<g id="meterNeedle" class="speed-needle" transform="rotate(-90 100 110)"><polygon class="needle-shadow" points="96.9,108.2 99.1,109.2 99.1,43 100,34 100.9,43 100.9,109.2 103.1,108.2 101.2,111 98.8,111"/><polygon class="needle-face" points="98.4,108.8 99.2,109.5 99.2,42 100,35 100.8,42 100.8,109.5 101.6,108.8 100,112"/></g>`;
- h+=`<g id="meterRpmNeedle" class="rpm-needle" transform="rotate(-90 100 110)"><polygon class="rpm-needle-shadow" points="97.5,108.8 99.2,109.5 99.2,53 100,47 100.8,53 100.8,109.5 102.5,108.8 101.2,112 98.8,112"/><polygon class="rpm-needle-face" points="98.7,109 99.3,109.5 99.3,53 100,48 100.7,53 100.7,109.5 101.3,109 100,112"/></g><circle class="hub-outer" cx="100" cy="110" r="8.5"/><circle class="hub" cx="100" cy="110" r="5.5"/><circle class="hub-cap" cx="100" cy="110" r="2"/>`;
- svg.innerHTML=h;
- const a=document.getElementById('meterValueArc'),ra=document.getElementById('meterRpmArc');meterArcLen=a?.getTotalLength()||0;meterRpmArcLen=ra?.getTotalLength()||0;
- if(a)a.style.strokeDasharray=`${meterArcLen} ${meterArcLen}`;
- if(ra)ra.style.strokeDasharray=`${meterRpmArcLen} ${meterRpmArcLen}`;
+ const svg=document.getElementById('meterGaugeSvg');
+ if(!svg) return;
+ svg.innerHTML=`
+  <defs>
+   <linearGradient id="meterGrad" x1="20" y1="0" x2="180" y2="0" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#22c55e"/><stop offset="60%" stop-color="#eab308"/><stop offset="100%" stop-color="#ef4444"/>
+   </linearGradient>
+   <linearGradient id="needleFace" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffffff"/><stop offset="55%" stop-color="#f8fafc"/><stop offset="100%" stop-color="#94a3b8"/></linearGradient>
+   <filter id="meterGlow" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+   <filter id="needleGlow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="2.4" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <path d="M20,110 A80,80 0 0,1 180,110" fill="none" stroke="#1e293b" stroke-width="14" stroke-linecap="round"/>
+  <path id="meterValueArc" d="M20,110 A80,80 0 0,1 180,110" fill="none" stroke="url(#meterGrad)" stroke-width="14" stroke-linecap="round" filter="url(#meterGlow)"/>
+  <!-- Analog needle: shadow/halo + tapered face + counterweight + center hub. Kept above all gauge artwork. -->
+  <g id="meterNeedle" transform="rotate(-90 100 110)" style="pointer-events:none;visibility:visible;opacity:1">
+   <path d="M96.8 111.5 L99.2 39 Q100 34 100.8 39 L103.2 111.5 Z" fill="#020617" opacity=".75" filter="url(#needleGlow)"/>
+   <path d="M98.2 111 L99.45 42 Q100 38 100.55 42 L101.8 111 Z" fill="url(#needleFace)" stroke="#ffffff" stroke-width=".7"/>
+   <path d="M98.2 111 L99.45 42 Q100 38 100.55 42 L101.8 111 Z" fill="none" stroke="#ffffff" stroke-width="1.2" filter="url(#needleGlow)"/>
+   <path d="M97 109 L103 109 L104 116 L96 116 Z" fill="#ef4444" stroke="#0f172a" stroke-width="1.5"/>
+   <circle cx="100" cy="110" r="9" fill="#020617" stroke="#cbd5e1" stroke-width="2" filter="url(#needleGlow)"/>
+   <circle cx="100" cy="110" r="5.2" fill="#ef4444" stroke="#ffffff" stroke-width="1.2"/>
+   <circle cx="100" cy="110" r="2" fill="#ffffff"/>
+  </g>`;
+ const arc=document.getElementById('meterValueArc');
+ meterArcLen=arc?.getTotalLength?.()||0;
+ if(arc) arc.style.strokeDasharray=`0 ${meterArcLen}`;
+ const needle=document.getElementById('meterNeedle');
+ if(needle) { needle.setAttribute('transform','rotate(-90 100 110)'); needle.style.transform='none'; }
 }
-function estimateEngineRpm(speedKmh,v){
- if(!v||!speedKmh||speedKmh<0.5)return 850;
- const ratio={'Two Wheeler':85,'Three Wheeler':72,'Car':62,'Pickup':58,'Truck':48,'Bus':42,'Other':60}[v.type]||60;
- const max={'Two Wheeler':10000,'Three Wheeler':6500,'Car':6500,'Pickup':5500,'Truck':3000,'Bus':2800,'Other':6000}[v.type]||6000;
- return Math.max(850,Math.min(max,Math.round(900+speedKmh*ratio)));
-}
-function estimatedOdometer(v,tripKm){
- if(!v)return 0;
- const base=Number(v.odometer||0);
- const historical=state.trips.filter(t=>String(t.vehicleId)===String(v.id)).reduce((s,t)=>s+Number(t.km||0),0);
- const manual=(state.manualKmEntries||[]).filter(e=>String(e.vehicleId)===String(v.id)).reduce((s,e)=>s+Number(e.km||0),0);
- return base+historical+manual+Number(tripKm||0);
-}
-
-function estimatedFuelRange(v,currentTripKm=0){
- if(!v || !Number(v.mileage) || Number(v.mileage)<=0) return {available:false,km:0,liters:0,spent:0};
- const rate=Number(v.rate)||0;
- const expenses=(state.expenses||[]).filter(e=>String(e.vehicleId)===String(v.id) && String(e.cat||'').toLowerCase()==='fuel');
- if(!expenses.length)return {available:false,km:0,liters:0,spent:0};
- const sorted=expenses.slice().sort((a,b)=>Number(a.id||0)-Number(b.id||0));
- const lastFuel=sorted[sorted.length-1];
- let liters=Number(lastFuel.liters)||0;
- if(!(liters>0)){const entryRate=Number(lastFuel.fuelRateAtEntry)||rate;if(entryRate>0)liters=(Number(lastFuel.amount)||0)/entryRate;}
- const fuelAnchor=Number(lastFuel.id||Date.now());
- const historicalAfterFuel=state.trips.filter(t=>String(t.vehicleId)===String(v.id) && Number(t.id||0)>fuelAnchor).reduce((sum,t)=>sum+Number(t.km||0),0);
- const manualAfterFuel=(state.manualKmEntries||[]).filter(e=>String(e.vehicleId)===String(v.id) && Number(e.id||0)>fuelAnchor).reduce((sum,e)=>sum+Number(e.km||0),0);
- const consumedKm=historicalAfterFuel+manualAfterFuel+Number(currentTripKm||0);
- const remaining=Math.max(0,liters*Number(v.mileage)-consumedKm);
- return {available:true,km:remaining,liters,spent:Number(lastFuel.amount)||0,consumedKm,lastFuelId:fuelAnchor};
-}
-
-const VEHICLE_METER_ICON={
- 'Two Wheeler':'bi-bicycle',
- 'Three Wheeler':'bi-truck-front-fill',
- 'Car':'bi-car-front-fill',
- 'Pickup':'bi-truck-front',
- 'Truck':'bi-truck',
- 'Bus':'bi-bus-front-fill',
- 'Other':'bi-speedometer2'
-};
-function setMeterVehicleIcon(v){
- const el=document.getElementById('meterVehicleIcon');
+function animateAnalogNeedle(el,angle,type){
  if(!el) return;
- const cls=VEHICLE_METER_ICON[v?.type]||VEHICLE_METER_ICON.Other;
- el.className='bi '+cls+' meter-context-icon';
- el.title=v?.type||'Vehicle';
-}
-function updateSportGear(speedKmh,v){
- const type=v?.type||'Car';let gear='N';
- if(speedKmh>2)gear=type==='Two Wheeler'?'1':speedKmh<18?'1':speedKmh<35?'2':speedKmh<55?'3':speedKmh<80?'4':speedKmh<110?'5':'6';
- setMeterVehicleIcon(v);
- const gp=document.getElementById('meterGearPill'),gt=document.getElementById('meterGear'),tx=document.getElementById('meterGearText');
- if(gp)gp.innerHTML='<i class="bi bi-gear-fill"></i> '+gear;
- if(tx)tx.textContent=`${type.toUpperCase()} • GEAR ${gear}`;else if(gt)gt.textContent=`${type.toUpperCase()} • GEAR ${gear}`;
-}
-let needleAnim={speed:-90,rpm:-90};
-function animateAnalogNeedle(el,target,key){
- if(!el)return;
- const start=Number(needleAnim[key]??target),delta=((target-start+540)%360)-180;
- const reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
- if(reduced){needleAnim[key]=target;el.setAttribute('transform',`rotate(${target} 100 110)`);return;}
- const t0=performance.now(),duration=170;
- function frame(now){const p=Math.min(1,(now-t0)/duration),e=1-Math.pow(1-p,3),a=start+delta*e;el.setAttribute('transform',`rotate(${a} 100 110)`);if(p<1)requestAnimationFrame(frame);else needleAnim[key]=target;}
- requestAnimationFrame(frame);
+ const safeAngle=Number.isFinite(Number(angle))?Number(angle):-90;
+ el.setAttribute('transform',`rotate(${safeAngle.toFixed(2)} 100 110)`);
+ el.style.transform='none';
+ el.style.transformOrigin='100px 110px';
+ el.dataset.angle=safeAngle.toFixed(2);
 }
 function updateMeterGauge(speed,maxSpeed,rpm,rpmMax){
- const pct=Math.max(0,Math.min(1,(Number(speed)||0)/maxSpeed)),rp=Math.max(0,Math.min(1,(Number(rpm)||0)/rpmMax));
- const a=document.getElementById('meterValueArc'),ra=document.getElementById('meterRpmArc');if(a&&meterArcLen)a.style.strokeDashoffset=String(meterArcLen*(1-pct));if(ra&&meterRpmArcLen)ra.style.strokeDashoffset=String(meterRpmArcLen*(1-rp));
- const n=document.getElementById('meterNeedle'),rn=document.getElementById('meterRpmNeedle');animateAnalogNeedle(n,-90+pct*180,'speed');animateAnalogNeedle(rn,-90+rp*180,'rpm');
- const d=document.getElementById('meterDigital');if(d){d.textContent=String(Math.round(speed||0));const z=pct<.6?'#4ade80':pct<.85?'#60a5fa':'#f87171';d.style.color=z;d.style.textShadow=`0 0 16px ${z}99`;}
- const rl=document.getElementById('meterRpmLive'),rb=document.getElementById('meterRpm');if(rl)rl.textContent=`${Math.round(rpm||0).toLocaleString('en-IN')} RPM`;if(rb)rb.textContent=Math.round(rpm||0).toLocaleString('en-IN');
- const leds=document.getElementById('meterLeds');if(leds){let h='',total=24,lit=Math.round(pct*total);for(let i=0;i<total;i++){const c=i<total*.6?'#22c55e':i<total*.84?'#eab308':'#ef4444';h+=`<i class="sport-led${i<lit?' active':''}" style="${i<lit?`background:${c};color:${c}`:''}"></i>`;}leds.innerHTML=h;}
+ const safeSpeed=Math.max(0,Number(speed)||0);
+ const safeMax=Math.max(1,Number(maxSpeed)||100);
+ const pct=Math.max(0,Math.min(1,safeSpeed/safeMax));
+ const safeRpm=Math.max(0,Number(rpm)||0);
+ const safeRpmMax=Math.max(1,Number(rpmMax)||6000);
+ const rp=Math.max(0,Math.min(1,safeRpm/safeRpmMax));
+
+ const a=document.getElementById('meterValueArc');
+ if(a&&meterArcLen){
+   a.style.strokeDasharray=`${meterArcLen}`;
+   a.style.strokeDashoffset=String(meterArcLen*(1-pct));
+ }
+
+ // The speed needle is a true SVG instrument needle. Its pivot is exactly the
+ // visible center hub at x=100,y=110, so the needle cannot orbit away from it.
+ const n=document.getElementById('meterNeedle');
+ animateAnalogNeedle(n,-90+pct*180,'speed');
+
+ // The current cluster has no separate RPM needle, so do not attempt to update
+ // a missing meterRpmNeedle/meterRpmArc element.
+ const d=document.getElementById('meterDigital');
+ if(d){
+   d.textContent=String(Math.round(safeSpeed));
+   const z=pct<.6?'#4ade80':pct<.85?'#60a5fa':'#f87171';
+   d.style.color=z;
+   d.style.textShadow=`0 0 16px ${z}99`;
+ }
+ const rl=document.getElementById('meterRpmLive'),rb=document.getElementById('meterRpm');
+ if(rl)rl.textContent=`${Math.round(safeRpm).toLocaleString('en-IN')} RPM`;
+ if(rb)rb.textContent=Math.round(safeRpm).toLocaleString('en-IN');
+
+ const leds=document.getElementById('meterLeds');
+ if(leds){
+   let h='',total=24,lit=Math.round(pct*total);
+   for(let i=0;i<total;i++){
+     const c=i<total*.6?'#22c55e':i<total*.84?'#eab308':'#ef4444';
+     h+=`<i class="sport-led${i<lit?' active':''}" style="${i<lit?`background:${c};color:${c}`:''}"></i>`;
+   }
+   leds.innerHTML=h;
+ }
 }
 function setMeterStatus(paused){
  const badge=document.getElementById('meterStatusBadge');
@@ -1377,6 +1365,7 @@ function openLiveMeter(kind){
  if(switchingKind) meterMapReset();
  if(kind==='trip'){
    const v=vehicle(document.getElementById('tripVehicle').value);
+   resetMeterGear(v?.type||'Other');
    setMeterVehicleIcon(v);
    title.innerHTML=`<i class="bi bi-speedometer2 me-2"></i>${v?.name||'Trip'} • Live Meter`;
    l4.textContent='Live Mileage'; l6.textContent='Fuel Used'; l7.textContent='Fuel Cost';
@@ -1415,20 +1404,97 @@ document.getElementById('liveMeterModal').addEventListener('hidden.bs.modal',asy
  document.getElementById('liveMeterModal').classList.remove('meter-fullscreen-host');
 });
 
+
+/* ---------- Vehicle-like speed / gear / RPM model ----------
+   GPS supplies road speed, not transmission gear. Without OBD/CAN data the app
+   cannot know the physical gear, so the cluster estimates gear from speed with
+   vehicle-type-specific shift bands and hysteresis. This keeps the displayed
+   gear/RPM coupled to the actual GPS speed instead of using an arbitrary timer.
+*/
+const VEHICLE_DRIVE_MODEL={
+ 'Two Wheeler':{gears:5, idle:1100, redline:10000, max:140, up:[0,12,25,42,65], down:[0,7,17,32,52], ratio:[3.10,2.05,1.55,1.25,1.00], final:3.00},
+ 'Three Wheeler':{gears:4, idle:1000, redline:6500, max:80, up:[0,14,28,45], down:[0,9,21,36], ratio:[3.40,2.10,1.35,1.00], final:3.40},
+ 'Car':{gears:6, idle:850, redline:6500, max:220, up:[0,18,35,55,80,110], down:[0,11,27,45,67,95], ratio:[3.60,2.20,1.50,1.15,0.90,0.70], final:3.10},
+ 'Pickup':{gears:6, idle:800, redline:5500, max:160, up:[0,16,32,52,75,105], down:[0,10,25,42,64,90], ratio:[3.80,2.30,1.55,1.18,0.92,0.72], final:3.55},
+ 'Truck':{gears:6, idle:700, redline:3000, max:120, up:[0,12,25,40,60,82], down:[0,7,18,32,50,70], ratio:[7.00,4.50,3.00,2.10,1.55,1.20], final:4.20},
+ 'Bus':{gears:6, idle:700, redline:2800, max:100, up:[0,12,24,38,55,72], down:[0,7,17,30,46,63], ratio:[6.50,4.20,2.80,2.00,1.45,1.10], final:4.00},
+ 'Other':{gears:5, idle:900, redline:6000, max:180, up:[0,16,32,52,78], down:[0,10,25,43,65], ratio:[3.50,2.20,1.50,1.10,0.85], final:3.20}
+};
+let meterGearState={type:null,gear:0};
+
+function resetMeterGear(type){
+ meterGearState={type:type||'Other',gear:0};
+}
+function estimateVehicleGear(speedKmh,v){
+ const type=v?.type||'Other';
+ const m=VEHICLE_DRIVE_MODEL[type]||VEHICLE_DRIVE_MODEL.Other;
+ const s=Math.max(0,Number(speedKmh)||0);
+
+ if(meterGearState.type!==type) resetMeterGear(type);
+ if(s<2){ meterGearState.gear=0; return 0; }
+
+ let g=meterGearState.gear||1;
+ if(g<1)g=1;
+
+ // Upshift only after crossing the next gear's band.
+ while(g<m.gears && s>=m.up[g]) g++;
+ // Downshift when speed falls well below the current gear's lower band.
+ while(g>1 && s<m.down[g]) g--;
+
+ meterGearState.gear=g;
+ return g;
+}
+function estimateEngineRpm(speedKmh,v){
+ const type=v?.type||'Other';
+ const m=VEHICLE_DRIVE_MODEL[type]||VEHICLE_DRIVE_MODEL.Other;
+ const s=Math.max(0,Number(speedKmh)||0);
+ const g=estimateVehicleGear(s,v);
+ if(g===0) return m.idle;
+
+ // Wheel speed × selected gear/final-drive ratio, normalized to a realistic
+ // vehicle RPM range. The calibration is deliberately smooth between GPS ticks.
+ const wheelRpm=s*1000/(2*Math.PI*0.30*60); // ~0.30 m effective wheel radius
+ let rpm=wheelRpm*m.ratio[g-1]*m.final;
+ const minRpm=m.idle+250;
+ const maxRpm=m.redline*0.98;
+ rpm=Math.max(minRpm,Math.min(maxRpm,rpm));
+
+ // Near an upshift band, avoid an artificial jump caused by GPS jitter.
+ if(g<m.gears && s>m.up[g]*0.94 && s<m.up[g]*1.02){
+   rpm=Math.min(rpm,m.redline*0.92);
+ }
+ return Math.round(rpm);
+}
+function updateSportGear(speedKmh,v){
+ const type=v?.type||'Other';
+ const gear=estimateVehicleGear(speedKmh,v);
+ const m=VEHICLE_DRIVE_MODEL[type]||VEHICLE_DRIVE_MODEL.Other;
+ const rpm=estimateEngineRpm(speedKmh,v);
+ const pill=document.getElementById('meterGearPill');
+ const textEl=document.getElementById('meterGearText');
+ if(pill) pill.textContent=gear===0?'N':String(gear);
+ if(textEl) textEl.textContent=gear===0?'NEUTRAL':`GEAR ${gear}`;
+ const rpmEl=document.getElementById('meterRpmLive');
+ if(rpmEl) rpmEl.textContent=`${rpm.toLocaleString('en-IN')} RPM`;
+ return {gear,rpm,maxRpm:m.redline};
+}
+
 function updateTripMeter(speedKmh,accuracy){
  if(meterKind!=='trip')return;
  const v=vehicle(document.getElementById('tripVehicle').value),meta=VEHICLE_GAUGE_META[v?.type]||VEHICLE_GAUGE_META.Other;
- const rpm=estimateEngineRpm(speedKmh,v),rpmMax={'Two Wheeler':10000,'Three Wheeler':6500,'Car':6500,'Pickup':5500,'Truck':3000,'Bus':2800,'Other':6000}[v?.type]||6000;
+ const drive=updateSportGear(speedKmh,v),rpm=drive.rpm,rpmMax=drive.maxRpm;
  updateMeterGauge(speedKmh,meta.max,rpm,rpmMax);
  document.getElementById('meterDistance').textContent=trip.km.toFixed(2)+' km';document.getElementById('meterTrip').textContent=trip.km.toFixed(2)+' km';document.getElementById('meterOdo').textContent=estimatedOdometer(v,trip.km).toFixed(1)+' km';
  document.getElementById('meterTime').textContent=fmtTime(trip.movingMs);const avg=trip.movingMs>0?trip.km/(trip.movingMs/3600000):0;document.getElementById('meterAvg').textContent=avg.toFixed(1)+' km/h';document.getElementById('meterMax').textContent=(trip.maxSpeed||0).toFixed(1)+' km/h';
  const live=v?estimateLiveMileage(v,speedKmh):0,fuel=v?trip.km/Number(v.mileage):0,cost=v?fuel*Number(v.rate):0;document.getElementById('meterVal4').textContent=v?live.toFixed(1)+' km/L':'--';document.getElementById('meterMileage').textContent=v?live.toFixed(1)+' km/L':'--';document.getElementById('meterVal6').textContent=v?fuel.toFixed(2)+' L':'--';document.getElementById('meterFuel').textContent=v?fuel.toFixed(2)+' L':'--';document.getElementById('meterVal7').textContent=v?money(cost):'--';document.getElementById('meterCost').textContent=v?money(cost):'--';
  const range=estimatedFuelRange(v,trip.km);document.getElementById('meterRange').textContent=v?(range.available?range.km.toFixed(0)+' km':'--'):'--';document.getElementById('meterEcoBar').style.width=Math.max(0,Math.min(100,(live/(Number(v?.mileage||1)*1.15))*100))+'%';document.getElementById('meterVal8').textContent=accuracy?'±'+Math.round(accuracy)+' m':'--';
- updateSportGear(speedKmh,v);setMeterStatus(trip.paused);
+ setMeterStatus(trip.paused);
  if(meterModalOpen){const vv=v,cfg=VEHICLE_ICON_MAP[vv?.type]||VEHICLE_ICON_MAP.Other,last=trip.points.at(-1);if(last)meterMapUpdate(last,cfg);}
 }
 function updateWalkMeter(speedKmh,accuracy){
  if(meterKind!=='walk') return;
+ const walkGear=document.getElementById('meterGearPill'); if(walkGear) walkGear.textContent='—';
+ const walkGearText=document.getElementById('meterGearText'); if(walkGearText) walkGearText.textContent='WALK';
  updateMeterGauge(speedKmh,WALK_GAUGE_META.max);
  document.getElementById('meterDistance').textContent=walk.km.toFixed(2)+' km';
  document.getElementById('meterTime').textContent=fmtTime(walk.movingMs);
@@ -1634,24 +1700,64 @@ function autosaveActiveTrip(){
  }catch(e){}
 }
 
+function latestFuelExpenseForVehicle(vehicleId){
+ const fuels=(state.expenses||[]).filter(e=>String(e.vehicleId)===String(vehicleId)&&String(e.cat||'').toLowerCase()==='fuel');
+ return fuels.sort((a,b)=>{
+   const da=String(a.date||''), db=String(b.date||'');
+   if(da!==db)return da<db?-1:1;
+   return Number(a.id||0)-Number(b.id||0);
+ })[fuels.length-1]||null;
+}
 function openManualKmModal(){
  const sel=document.getElementById('manualKmVehicle');
- if(sel){sel.innerHTML=state.vehicles.map(v=>`<option value="${v.id}">${v.name} • ${v.type}</option>`).join('');const active=state.vehicles.find(v=>v.active);if(active)sel.value=active.id;}
+ if(sel){
+   sel.innerHTML=state.vehicles.map(v=>`<option value="${v.id}">${v.name} • ${v.type}</option>`).join('');
+   const active=state.vehicles.find(v=>v.active);
+   if(active)sel.value=active.id;
+ }
  document.getElementById('manualKmValue').value='';
  document.getElementById('manualKmDate').value=new Date().toISOString().slice(0,10);
  document.getElementById('manualKmNote').value='';
+ const info=document.getElementById('manualKmFuelInfo');
+ const chosen=vehicle(sel?.value);
+ const lf=chosen?latestFuelExpenseForVehicle(chosen.id):null;
+ if(info)info.innerHTML=lf
+   ? `<i class="bi bi-fuel-pump-fill me-1"></i>Latest fuel: ${lf.date||'--'} • ${Number(lf.liters||0).toFixed(2)} L • ${money(Number(lf.amount)||0)}. Your missed KM will be linked to this fuel fill.`
+   : `<i class="bi bi-info-circle me-1"></i>No fuel entry found for this vehicle yet. KM will still be added to ODO.`;
  bootstrap.Modal.getOrCreateInstance(document.getElementById('manualKmModal')).show();
+document.getElementById('manualKmVehicle')?.addEventListener('change',function(){
+ const info=document.getElementById('manualKmFuelInfo'), v=vehicle(this.value), lf=v?latestFuelExpenseForVehicle(v.id):null;
+ if(info)info.innerHTML=lf
+   ? `<i class="bi bi-fuel-pump-fill me-1"></i>Latest fuel: ${lf.date||'--'} • ${Number(lf.liters||0).toFixed(2)} L • ${money(Number(lf.amount)||0)}. Your missed KM will be linked to this fuel fill.`
+   : `<i class="bi bi-info-circle me-1"></i>No fuel entry found for this vehicle yet. KM will still be added to ODO.`;
+});
+
 }
 function saveManualKm(){
  const vehicleId=document.getElementById('manualKmVehicle').value;
- const km=Number(document.getElementById('manualKmValue').value)||0;
- if(!vehicleId||km<=0)return alert('Enter a valid travelled distance.');
+ const km=Number(document.getElementById('manualKmValue').value);
+ const entryDate=document.getElementById('manualKmDate').value||new Date().toISOString().slice(0,10);
+ if(!vehicleId||!Number.isFinite(km)||km<=0)return alert('Enter a valid travelled distance greater than 0 KM.');
+ const v=vehicle(vehicleId);
+ if(!v)return alert('Please select a valid vehicle.');
+ const latestFuel=latestFuelExpenseForVehicle(vehicleId);
  state.manualKmEntries=state.manualKmEntries||[];
- state.manualKmEntries.push({id:Date.now(),date:document.getElementById('manualKmDate').value||new Date().toISOString().slice(0,10),vehicleId,km:Number(km.toFixed(3)),note:document.getElementById('manualKmNote').value.trim()||'Manual missed trip distance'});
- persist();renderAll();
+ state.manualKmEntries.push({
+   id:Date.now(),
+   date:entryDate,
+   vehicleId,
+   km:Number(km.toFixed(3)),
+   note:document.getElementById('manualKmNote').value.trim()||'Manual missed trip distance',
+   fuelAnchorId:latestFuel?Number(latestFuel.id):null
+ });
+ persist();
+ renderAll();
  bootstrap.Modal.getInstance(document.getElementById('manualKmModal'))?.hide();
- if(meterModalOpen&&meterKind==='trip')updateTripMeter(trip.points.at(-1)?.speed||0,trip.points.at(-1)?.acc);
- alert(`${km.toFixed(2)} km added successfully. ODO and estimated range have been recalculated.`);
+ if(meterModalOpen&&meterKind==='trip'){
+   const activeVehicle=vehicle(document.getElementById('tripVehicle').value);
+   updateTripMeter(trip.points.at(-1)?.speed||0,trip.points.at(-1)?.acc);
+ }
+ alert(`${km.toFixed(2)} km added successfully. ODO and fuel-range calculations have been updated${latestFuel?' from the latest fuel entry':''}.`);
 }
 document.getElementById('addFuelBtn').onclick=()=>{
  if(!trip.running) return;
