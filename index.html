@@ -129,6 +129,12 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 .cat-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.05rem;flex:0 0 38px}
 .cat-bar{height:6px;border-radius:4px;background:#eef2f7;overflow:hidden;margin-top:4px}
 .cat-bar>span{display:block;height:100%;border-radius:4px}
+
+.speed-needle,.rpm-needle{transform-box:fill-box;transform-origin:100px 110px;transition:filter .25s ease;}
+.needle-face,.rpm-needle-face{stroke:rgba(255,255,255,.75);stroke-width:.45;}
+.needle-shadow,.rpm-needle-shadow{opacity:.55;}
+.meter-needle-sweep .needle-face,.meter-needle-sweep .rpm-needle-face{filter:drop-shadow(0 0 3px rgba(255,255,255,.9));}
+.manual-km-note{font-size:.76rem;color:#64748b;}
 </style>
 
 <style id="meter-context-icons">
@@ -478,6 +484,22 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
 <div class="modal fade" id="userModal"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5>Create Subscriber</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input id="uBusiness" class="form-control mb-2" placeholder="Business name"><input id="uName" class="form-control mb-2" placeholder="Username"><input id="uPass" class="form-control mb-2" placeholder="Temporary password"><select id="uPlan" class="form-select mb-2"><option>Starter</option><option>Professional</option><option>Enterprise</option></select><select id="uStatus" class="form-select"><option>Active</option><option>Pending</option></select></div><div class="modal-footer"><button class="btn btn-primary" onclick="addUser()">Create</button></div></div></div></div>
 
 <!-- Live Meter Modal: digital + analog speedometer shown on Start / Pause / Resume -->
+<div class="modal fade" id="manualKmModal" tabindex="-1" aria-hidden="true">
+ <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-content">
+   <div class="modal-header"><h5 class="modal-title"><i class="bi bi-signpost-2 me-2"></i>Add Missed KM</h5><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+   <div class="modal-body">
+    <div class="alert alert-info py-2 small"><i class="bi bi-info-circle me-1"></i>Use this when you forgot to start GPS tracking. The distance will be added to ODO and to the distance travelled since the latest fuel entry.</div>
+    <label class="form-label">Vehicle</label><select id="manualKmVehicle" class="form-select mb-2"></select>
+    <label class="form-label">Distance travelled (KM)</label><input id="manualKmValue" type="number" min="0.01" step="0.01" class="form-control mb-2" placeholder="e.g. 37.5">
+    <label class="form-label">Date</label><input id="manualKmDate" type="date" class="form-control mb-2">
+    <label class="form-label">Note</label><input id="manualKmNote" class="form-control" placeholder="Forgot to start trip / travelled before GPS start">
+    <div class="manual-km-note mt-2"><i class="bi bi-calculator me-1"></i>Calculations update automatically after saving.</div>
+   </div>
+   <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" onclick="saveManualKm()"><i class="bi bi-check2-circle me-1"></i>Add KM</button></div>
+  </div>
+ </div>
+</div>
 <div class="modal fade" id="liveMeterModal" tabindex="-1" data-bs-backdrop="static">
  <div class="modal-dialog modal-dialog-centered">
   <div class="modal-content meter-modal-content">
@@ -527,7 +549,7 @@ body{background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,san
     </div>
    </div>
    <div class="modal-footer border-0 justify-content-center gap-2 pt-0">
-    <button class="btn btn-warning" id="meterPauseBtn" onclick="toggleMeterPause()"><i class="bi bi-pause-fill"></i> Pause</button>
+    <button class="btn btn-outline-primary" onclick="openManualKmModal()"><i class="bi bi-signpost-2"></i> Add Missed KM</button><button class="btn btn-warning" id="meterPauseBtn" onclick="toggleMeterPause()"><i class="bi bi-pause-fill"></i> Pause</button>
     <button class="btn btn-danger" id="meterStopBtn" onclick="stopFromMeter()"><i class="bi bi-stop-fill"></i> Stop &amp; Save</button><div class="w-100 small text-secondary text-center mt-1">RPM is a speed/GPS-based estimate; true engine RPM requires OBD/CAN data. Range is calculated automatically from recorded fuel expenses, vehicle mileage and tracked distance.</div><div class="w-100 meter-background-status justify-content-center mt-1"><i class="bi bi-broadcast-pin"></i> Background tracking: best-effort browser/OS support • screen wake lock active when supported</div>
    </div>
   </div>
@@ -568,6 +590,7 @@ function loadDemoState(){
 }
 let state=loadDemoState();
 state.vehicles=(state.vehicles||[]).map(v=>Object.assign({odometer:0,tankCapacity:5},v));
+state.manualKmEntries=state.manualKmEntries||[];
 state.vehicles=(state.vehicles||[]).map(v=>Object.assign({odometer:0,tankCapacity:5},v));
 let currentUser=null, watchId=null, trip={running:false,paused:false,points:[],km:0,movingMs:0,lastMoveAt:Date.now(),fuelLog:[]};
 
@@ -1275,29 +1298,27 @@ function estimateEngineRpm(speedKmh,v){
 }
 function estimatedOdometer(v,tripKm){
  if(!v)return 0;
- const base=Number(v.odometer||0), historical=state.trips.filter(t=>String(t.vehicleId)===String(v.id)).reduce((s,t)=>s+Number(t.km||0),0);
- return base+historical+Number(tripKm||0);
+ const base=Number(v.odometer||0);
+ const historical=state.trips.filter(t=>String(t.vehicleId)===String(v.id)).reduce((s,t)=>s+Number(t.km||0),0);
+ const manual=(state.manualKmEntries||[]).filter(e=>String(e.vehicleId)===String(v.id)).reduce((s,e)=>s+Number(e.km||0),0);
+ return base+historical+manual+Number(tripKm||0);
 }
 
 function estimatedFuelRange(v,currentTripKm=0){
  if(!v || !Number(v.mileage) || Number(v.mileage)<=0) return {available:false,km:0,liters:0,spent:0};
  const rate=Number(v.rate)||0;
  const expenses=(state.expenses||[]).filter(e=>String(e.vehicleId)===String(v.id) && String(e.cat||'').toLowerCase()==='fuel');
- let liters=0,spent=0;
- expenses.forEach(e=>{
-   const amount=Number(e.amount)||0;
-   const entryRate=Number(e.fuelRateAtEntry)||rate;
-   const entryLiters=Number(e.liters);
-   if(entryLiters>0) liters+=entryLiters;
-   else if(entryRate>0) liters+=amount/entryRate;
-   spent+=amount;
- });
- // Mid-trip fuel is already written to state.expenses, so do not add trip.fuelLog again.
- const historicalKm=state.trips.filter(t=>String(t.vehicleId)===String(v.id)).reduce((sum,t)=>sum+Number(t.km||0),0);
- const consumedKm=historicalKm+Number(currentTripKm||0);
- const theoreticalKm=liters*Number(v.mileage);
- const remaining=Math.max(0,theoreticalKm-consumedKm);
- return {available:liters>0,km:remaining,liters,spent};
+ if(!expenses.length)return {available:false,km:0,liters:0,spent:0};
+ const sorted=expenses.slice().sort((a,b)=>Number(a.id||0)-Number(b.id||0));
+ const lastFuel=sorted[sorted.length-1];
+ let liters=Number(lastFuel.liters)||0;
+ if(!(liters>0)){const entryRate=Number(lastFuel.fuelRateAtEntry)||rate;if(entryRate>0)liters=(Number(lastFuel.amount)||0)/entryRate;}
+ const fuelAnchor=Number(lastFuel.id||Date.now());
+ const historicalAfterFuel=state.trips.filter(t=>String(t.vehicleId)===String(v.id) && Number(t.id||0)>fuelAnchor).reduce((sum,t)=>sum+Number(t.km||0),0);
+ const manualAfterFuel=(state.manualKmEntries||[]).filter(e=>String(e.vehicleId)===String(v.id) && Number(e.id||0)>fuelAnchor).reduce((sum,e)=>sum+Number(e.km||0),0);
+ const consumedKm=historicalAfterFuel+manualAfterFuel+Number(currentTripKm||0);
+ const remaining=Math.max(0,liters*Number(v.mileage)-consumedKm);
+ return {available:true,km:remaining,liters,spent:Number(lastFuel.amount)||0,consumedKm,lastFuelId:fuelAnchor};
 }
 
 const VEHICLE_METER_ICON={
@@ -1324,10 +1345,20 @@ function updateSportGear(speedKmh,v){
  if(gp)gp.innerHTML='<i class="bi bi-gear-fill"></i> '+gear;
  if(tx)tx.textContent=`${type.toUpperCase()} • GEAR ${gear}`;else if(gt)gt.textContent=`${type.toUpperCase()} • GEAR ${gear}`;
 }
+let needleAnim={speed:-90,rpm:-90};
+function animateAnalogNeedle(el,target,key){
+ if(!el)return;
+ const start=Number(needleAnim[key]??target),delta=((target-start+540)%360)-180;
+ const reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+ if(reduced){needleAnim[key]=target;el.setAttribute('transform',`rotate(${target} 100 110)`);return;}
+ const t0=performance.now(),duration=170;
+ function frame(now){const p=Math.min(1,(now-t0)/duration),e=1-Math.pow(1-p,3),a=start+delta*e;el.setAttribute('transform',`rotate(${a} 100 110)`);if(p<1)requestAnimationFrame(frame);else needleAnim[key]=target;}
+ requestAnimationFrame(frame);
+}
 function updateMeterGauge(speed,maxSpeed,rpm,rpmMax){
  const pct=Math.max(0,Math.min(1,(Number(speed)||0)/maxSpeed)),rp=Math.max(0,Math.min(1,(Number(rpm)||0)/rpmMax));
  const a=document.getElementById('meterValueArc'),ra=document.getElementById('meterRpmArc');if(a&&meterArcLen)a.style.strokeDashoffset=String(meterArcLen*(1-pct));if(ra&&meterRpmArcLen)ra.style.strokeDashoffset=String(meterRpmArcLen*(1-rp));
- const n=document.getElementById('meterNeedle'),rn=document.getElementById('meterRpmNeedle');if(n)n.setAttribute('transform',`rotate(${-90+pct*180} 100 110)`);if(rn)rn.setAttribute('transform',`rotate(${-90+rp*180} 100 110)`);
+ const n=document.getElementById('meterNeedle'),rn=document.getElementById('meterRpmNeedle');animateAnalogNeedle(n,-90+pct*180,'speed');animateAnalogNeedle(rn,-90+rp*180,'rpm');
  const d=document.getElementById('meterDigital');if(d){d.textContent=String(Math.round(speed||0));const z=pct<.6?'#4ade80':pct<.85?'#60a5fa':'#f87171';d.style.color=z;d.style.textShadow=`0 0 16px ${z}99`;}
  const rl=document.getElementById('meterRpmLive'),rb=document.getElementById('meterRpm');if(rl)rl.textContent=`${Math.round(rpm||0).toLocaleString('en-IN')} RPM`;if(rb)rb.textContent=Math.round(rpm||0).toLocaleString('en-IN');
  const leds=document.getElementById('meterLeds');if(leds){let h='',total=24,lit=Math.round(pct*total);for(let i=0;i<total;i++){const c=i<total*.6?'#22c55e':i<total*.84?'#eab308':'#ef4444';h+=`<i class="sport-led${i<lit?' active':''}" style="${i<lit?`background:${c};color:${c}`:''}"></i>`;}leds.innerHTML=h;}
@@ -1603,6 +1634,25 @@ function autosaveActiveTrip(){
  }catch(e){}
 }
 
+function openManualKmModal(){
+ const sel=document.getElementById('manualKmVehicle');
+ if(sel){sel.innerHTML=state.vehicles.map(v=>`<option value="${v.id}">${v.name} • ${v.type}</option>`).join('');const active=state.vehicles.find(v=>v.active);if(active)sel.value=active.id;}
+ document.getElementById('manualKmValue').value='';
+ document.getElementById('manualKmDate').value=new Date().toISOString().slice(0,10);
+ document.getElementById('manualKmNote').value='';
+ bootstrap.Modal.getOrCreateInstance(document.getElementById('manualKmModal')).show();
+}
+function saveManualKm(){
+ const vehicleId=document.getElementById('manualKmVehicle').value;
+ const km=Number(document.getElementById('manualKmValue').value)||0;
+ if(!vehicleId||km<=0)return alert('Enter a valid travelled distance.');
+ state.manualKmEntries=state.manualKmEntries||[];
+ state.manualKmEntries.push({id:Date.now(),date:document.getElementById('manualKmDate').value||new Date().toISOString().slice(0,10),vehicleId,km:Number(km.toFixed(3)),note:document.getElementById('manualKmNote').value.trim()||'Manual missed trip distance'});
+ persist();renderAll();
+ bootstrap.Modal.getInstance(document.getElementById('manualKmModal'))?.hide();
+ if(meterModalOpen&&meterKind==='trip')updateTripMeter(trip.points.at(-1)?.speed||0,trip.points.at(-1)?.acc);
+ alert(`${km.toFixed(2)} km added successfully. ODO and estimated range have been recalculated.`);
+}
 document.getElementById('addFuelBtn').onclick=()=>{
  if(!trip.running) return;
  const liters=Number(document.getElementById('fuelLiters').value)||0;
